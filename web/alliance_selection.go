@@ -7,14 +7,15 @@ package web
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/Team254/cheesy-arena/tournament"
-	"github.com/Team254/cheesy-arena/websocket"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/Team254/cheesy-arena/model"
+	"github.com/Team254/cheesy-arena/tournament"
+	"github.com/Team254/cheesy-arena/websocket"
 )
 
 // Global var to hold configurable time limit for selections. A value of zero disables the timer.
@@ -28,6 +29,9 @@ const allianceSelectionBreakDurationSec = 120
 
 // Global var to hold a ticker used for the alliance selection timer.
 var allianceSelectionTicker *time.Ticker
+
+// Global var to hold a done channel to stop the alliance selection timer goroutine.
+var allianceSelectionTickerDone chan bool
 
 // Shows the alliance selection page.
 func (web *Web) allianceSelectionGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -302,6 +306,9 @@ func (web *Web) allianceSelectionWebsocketHandler(w http.ResponseWriter, r *http
 			if allianceSelectionTicker != nil {
 				allianceSelectionTicker.Stop()
 			}
+			if allianceSelectionTickerDone != nil {
+				close(allianceSelectionTickerDone)
+			}
 			if web.arena.AllianceSelectionTimeRemainingSec == 0 {
 				web.arena.AllianceSelectionTimeRemainingSec = allianceSelectionTimeLimitSec
 				currentAllianceSelectionTimeLimitSec = allianceSelectionTimeLimitSec
@@ -309,21 +316,28 @@ func (web *Web) allianceSelectionWebsocketHandler(w http.ResponseWriter, r *http
 			web.arena.AllianceSelectionShowTimer = true
 			web.arena.AllianceSelectionNotifier.Notify()
 			allianceSelectionTicker = time.NewTicker(time.Second)
+			allianceSelectionTickerDone = make(chan bool)
 			go func() {
-				for range allianceSelectionTicker.C {
-					web.arena.AllianceSelectionTimeRemainingSec--
-					web.arena.AllianceSelectionNotifier.Notify()
+				for {
+					select {
+					case <-allianceSelectionTickerDone:
+						return
+					case <-allianceSelectionTicker.C:
+						web.arena.AllianceSelectionTimeRemainingSec--
+						web.arena.AllianceSelectionNotifier.Notify()
 
-					if web.arena.AllianceSelectionTimeRemainingSec <= 0 {
-						allianceSelectionTicker.Stop()
-					}
+						if web.arena.AllianceSelectionTimeRemainingSec <= 0 {
+							allianceSelectionTicker.Stop()
+							return
+						}
 
-					// Only play sounds if we are not in a break between rounds
-					if currentAllianceSelectionTimeLimitSec != allianceSelectionBreakDurationSec {
-						if web.arena.AllianceSelectionTimeRemainingSec == 5 {
-							web.arena.PlaySound("pick_clock")
-						} else if web.arena.AllianceSelectionTimeRemainingSec == 0 {
-							web.arena.PlaySound("pick_clock_expired")
+						// Only play sounds if we are not in a break between rounds
+						if currentAllianceSelectionTimeLimitSec != allianceSelectionBreakDurationSec {
+							if web.arena.AllianceSelectionTimeRemainingSec == 5 {
+								web.arena.PlaySound("pick_clock")
+							} else if web.arena.AllianceSelectionTimeRemainingSec == 0 {
+								web.arena.PlaySound("pick_clock_expired")
+							}
 						}
 					}
 				}
@@ -331,6 +345,10 @@ func (web *Web) allianceSelectionWebsocketHandler(w http.ResponseWriter, r *http
 		case "stopTimer":
 			if allianceSelectionTicker != nil {
 				allianceSelectionTicker.Stop()
+			}
+			if allianceSelectionTickerDone != nil {
+				close(allianceSelectionTickerDone)
+				allianceSelectionTickerDone = nil
 			}
 			web.arena.AllianceSelectionNotifier.Notify()
 		case "restartTimer":
@@ -341,6 +359,10 @@ func (web *Web) allianceSelectionWebsocketHandler(w http.ResponseWriter, r *http
 		case "hideTimer":
 			if allianceSelectionTicker != nil {
 				allianceSelectionTicker.Stop()
+			}
+			if allianceSelectionTickerDone != nil {
+				close(allianceSelectionTickerDone)
+				allianceSelectionTickerDone = nil
 			}
 			web.arena.AllianceSelectionShowTimer = false
 			web.arena.AllianceSelectionTimeRemainingSec = 0

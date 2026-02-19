@@ -71,6 +71,9 @@ func (c *GoveeClient) StartDiscovery() error {
 		return fmt.Errorf("discovery already running")
 	}
 
+	// Recreate stopChan to make restart-safe (prevents panic on double-close and allows restart)
+	c.stopChan = make(chan bool)
+
 	// Start listening for scan replies
 	if err := c.startReplyListener(); err != nil {
 		return fmt.Errorf("failed to start reply listener: %v", err)
@@ -132,8 +135,8 @@ func (c *GoveeClient) GetDevice(deviceId string) (*GoveeDevice, error) {
 
 // GetAllDevices returns a list of all discovered devices.
 func (c *GoveeClient) GetAllDevices() []*GoveeDevice {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
 	c.pruneStaleDevices()
 

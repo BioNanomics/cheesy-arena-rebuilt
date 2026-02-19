@@ -185,9 +185,9 @@ func (web *Web) ledsTestHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[LED Test] Color to set: RGB(%d,%d,%d)", color.R, color.G, color.B)
 
 	// Enable test mode to prevent arena loop from overwriting LED colors
-	web.arena.LedTestMode = true
+	web.arena.SetLedTestMode(true)
 	defer func() {
-		web.arena.LedTestMode = false
+		web.arena.SetLedTestMode(false)
 		log.Printf("[LED Test] Test mode disabled")
 	}()
 

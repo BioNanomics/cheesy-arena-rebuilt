@@ -62,7 +62,6 @@ func (g *GoveeController) SetColor(color Color) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
-	log.Printf("[Govee] SetColor called for device %s: RGB(%d,%d,%d)", g.deviceId, color.R, color.G, color.B)
 	g.color = color
 }
 
@@ -89,70 +88,58 @@ func (g *GoveeController) update(force bool) {
 	g.mutex.Lock()
 	color := g.color
 	deviceId := g.deviceId
+	lastUpdate := g.lastUpdate
+	lastColor := g.lastColor
 	g.mutex.Unlock()
 
-	log.Printf("[Govee] Update() called for device %s, color RGB(%d,%d,%d)", deviceId, color.R, color.G, color.B)
-
 	// Don't send updates too frequently (unless forced)
-	if !force && time.Since(g.lastUpdate) < goveeUpdateInterval && color.Equals(g.lastColor) {
-		log.Printf("[Govee] Skipping - too frequent or same color (last: %v, interval: %v)", time.Since(g.lastUpdate), goveeUpdateInterval)
+	if !force && time.Since(lastUpdate) < goveeUpdateInterval && color.Equals(lastColor) {
 		return
 	}
 
 	// Skip if device ID is not configured
 	if deviceId == "" {
-		log.Printf("[Govee] Skipping - device ID not configured")
 		return
 	}
 
 	// Skip if Govee client is not enabled
 	if g.goveeClient == nil {
-		log.Printf("[Govee] Skipping - goveeClient is nil")
 		return
 	}
 	if !g.goveeClient.IsEnabled() {
-		log.Printf("[Govee] Skipping - discovery not running for device %s", deviceId)
 		g.mutex.Lock()
 		g.isHealthy = false
 		g.mutex.Unlock()
 		return
 	}
 
-	g.lastUpdate = time.Now()
-
 	// Determine if we need to turn on, off, or change color
 	var err error
 	if color.Equals(ColorOff) {
 		// Turn off with retry logic (handled by client)
-		log.Printf("[Govee] Sending TurnOff to %s", deviceId)
 		err = g.goveeClient.TurnOff(deviceId)
 		if err != nil {
 			log.Printf("[Govee] TurnOff failed for device %s: %v", deviceId, err)
-		} else {
-			log.Printf("[Govee] TurnOff sent successfully to %s", deviceId)
 		}
 	} else {
 		// First ensure device is on
-		if g.lastColor.Equals(ColorOff) || !g.lastColor.Equals(color) {
+		if lastColor.Equals(ColorOff) || !lastColor.Equals(color) {
 			// Set color first
-			log.Printf("[Govee] Sending SetColor RGB(%d,%d,%d) to %s", color.R, color.G, color.B, deviceId)
 			err = g.goveeClient.SetColor(deviceId, color.R, color.G, color.B)
 			if err != nil {
 				log.Printf("[Govee] SetColor failed for device %s: %v", deviceId, err)
 			} else {
-				log.Printf("[Govee] SetColor sent successfully, now sending TurnOn to %s", deviceId)
 				// Then turn on
 				err = g.goveeClient.TurnOn(deviceId)
 				if err != nil {
 					log.Printf("[Govee] TurnOn failed for device %s: %v", deviceId, err)
-				} else {
-					log.Printf("[Govee] TurnOn sent successfully to %s", deviceId)
 				}
 			}
 		}
 	}
 
 	g.mutex.Lock()
+	g.lastUpdate = time.Now()
 	if err != nil {
 		log.Printf("[Govee] Error updating device %s: %v", deviceId, err)
 

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Team254/cheesy-arena/game"
@@ -98,7 +99,7 @@ type Arena struct {
 	LowerThird                        *model.LowerThird
 	ShowLowerThird                    bool
 	MuteMatchSounds                   bool
-	LedTestMode                       bool // When true, arena loop won't update LED colors
+	ledTestMode                       atomic.Bool // When true, arena loop won't update LED colors
 	matchAborted                      bool
 	soundsPlayed                      map[*game.MatchSound]struct{}
 	breakDescription                  string
@@ -341,26 +342,7 @@ func (arena *Arena) InitializeLedControllers() error {
 		arena.RedHubLeds = led.NewGoveeController(redDeviceId, arena.GoveeClient)
 		arena.BlueHubLeds = led.NewGoveeController(blueDeviceId, arena.GoveeClient)
 
-		// Start discovery if not already running (needed for testing from setup page)
-		if arena.GoveeClient != nil {
-			if !arena.GoveeClient.IsEnabled() {
-				// Discovery not running yet, start it
-				go func() {
-					if err := arena.GoveeClient.StartDiscovery(); err != nil {
-						log.Printf("[LED] Warning: Failed to start Govee discovery: %v", err)
-					} else {
-						log.Println("[LED] Govee device discovery started")
-					}
-				}()
-			}
-
-			// Always set discovery ready flag after a delay (whether we just started discovery or it was already running)
-			go func() {
-				time.Sleep(3 * time.Second)
-				arena.GoveeClient.SetDiscoveryReady()
-				log.Println("[LED] Initial device discovery complete")
-			}()
-		}
+		// Note: Govee discovery is started in arena.Run() to ensure proper lifecycle management
 
 		log.Printf("[LED] Initialized Govee controllers (Red: %s, Blue: %s)", redDeviceId, blueDeviceId)
 	} else {
@@ -1431,8 +1413,7 @@ func (arena *Arena) handlePlcInputOutput() {
 // Updates the DMX light bars based on match state and hub activation.
 func (arena *Arena) handleHubLights() {
 	// Skip LED updates if in test mode
-	if arena.LedTestMode {
-		log.Printf("[Arena] Skipping handleHubLights - LedTestMode is true")
+	if arena.ledTestMode.Load() {
 		return
 	}
 
@@ -1613,4 +1594,14 @@ func (arena *Arena) positionPostMatchScoreReady(position string) bool {
 func (arena *Arena) runPeriodicTasks() {
 	arena.updateEarlyLateMessage()
 	arena.purgeDisconnectedDisplays()
+}
+
+// SetLedTestMode sets the LED test mode flag atomically.
+func (arena *Arena) SetLedTestMode(enabled bool) {
+	arena.ledTestMode.Store(enabled)
+}
+
+// GetLedTestMode gets the LED test mode flag atomically.
+func (arena *Arena) GetLedTestMode() bool {
+	return arena.ledTestMode.Load()
 }
