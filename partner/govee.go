@@ -239,6 +239,7 @@ func (c *GoveeClient) startReplyListener() error {
 // listenForReplies processes incoming device discovery replies.
 func (c *GoveeClient) listenForReplies() {
 	buffer := make([]byte, 1024)
+	log.Printf("[Govee] Reply listener started, waiting for device responses...")
 
 	for {
 		select {
@@ -246,7 +247,7 @@ func (c *GoveeClient) listenForReplies() {
 			return
 		default:
 			c.replySocket.SetReadDeadline(time.Now().Add(1 * time.Second))
-			n, _, err := c.replySocket.ReadFromUDP(buffer)
+			n, addr, err := c.replySocket.ReadFromUDP(buffer)
 			if err != nil {
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					continue
@@ -255,22 +256,28 @@ func (c *GoveeClient) listenForReplies() {
 				continue
 			}
 
+			log.Printf("[Govee] Received %d bytes from %s: %s", n, addr, string(buffer[:n]))
+
 			var msg goveeMessage
 			if err := json.Unmarshal(buffer[:n], &msg); err != nil {
+				log.Printf("[Govee] Failed to unmarshal JSON: %v", err)
 				continue
 			}
 
 			if msg.Msg.Cmd != "scan" {
+				log.Printf("[Govee] Ignoring non-scan command: %s", msg.Msg.Cmd)
 				continue
 			}
 
 			deviceId, ok := msg.Msg.Data["device"].(string)
 			if !ok {
+				log.Printf("[Govee] Missing or invalid 'device' field in response")
 				continue
 			}
 
 			ip, ok := msg.Msg.Data["ip"].(string)
 			if !ok {
+				log.Printf("[Govee] Missing or invalid 'ip' field in response")
 				continue
 			}
 
@@ -284,6 +291,8 @@ func (c *GoveeClient) listenForReplies() {
 				LastSeen: time.Now(),
 			}
 			c.mutex.Unlock()
+
+			log.Printf("[Govee] Discovered device: %s (%s @ %s)", deviceId, sku, ip)
 		}
 	}
 }
@@ -344,9 +353,11 @@ func (c *GoveeClient) sendScanRequest() {
 	}
 
 	if c.scanSocket != nil {
-		_, err = c.scanSocket.Write(jsonData)
+		n, err := c.scanSocket.Write(jsonData)
 		if err != nil {
 			log.Printf("[Govee] Failed to send scan request: %v", err)
+		} else {
+			log.Printf("[Govee] Sent scan request (%d bytes): %s", n, string(jsonData))
 		}
 	}
 }
