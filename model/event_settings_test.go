@@ -4,8 +4,9 @@
 package model
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEventSettingsReadWrite(t *testing.T) {
@@ -29,15 +30,19 @@ func TestEventSettingsReadWrite(t *testing.T) {
 			SCCUpCommands:               "configure terminal\ninterface range gigabitEthernet 1/2-4\nno shutdown\nexit\nexit\nexit",
 			SCCDownCommands:             "configure terminal\ninterface range gigabitEthernet 1/2-4\nshutdown\nexit\nexit\nexit",
 			WarmupDurationSec:           0,
-			AutoDurationSec:             15,
+			AutoDurationSec:             20,
 			PauseDurationSec:            3,
-			TeleopDurationSec:           135,
+			TeleopDurationSec:           140,
 			WarningRemainingDurationSec: 20,
-			AutoBonusCoralThreshold:     1,
-			CoralBonusPerLevelThreshold: 7,
-			CoralBonusCoopEnabled:       true,
-			BargeBonusPointThreshold:    16,
-			IncludeAlgaeInBargeBonus:    false,
+			EnergizedRPThreshold:        100,
+			SuperchargedRPThreshold:     360,
+			TraversalRPThreshold:        50,
+			DMXAddress:                  "10.0.100.80",
+			LedControllerType:           "dmx",
+			RedLedAddress:               "",
+			BlueLedAddress:              "",
+			RedLedDeviceId:              "",
+			BlueLedDeviceId:             "",
 			CompanionAddress:            "",
 			CompanionPort:               0,
 		},

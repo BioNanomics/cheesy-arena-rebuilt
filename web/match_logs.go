@@ -250,9 +250,6 @@ func (web *Web) buildMatchLogsList(matchType model.MatchType) ([]MatchLogsListIt
 		matchLogsList[i].Time = match.Time.Local().Format("Mon 1/02 03:04 PM")
 		matchLogsList[i].RedTeams = []int{match.Red1, match.Red2, match.Red3}
 		matchLogsList[i].BlueTeams = []int{match.Blue1, match.Blue2, match.Blue3}
-		if err != nil {
-			return []MatchLogsListItem{}, err
-		}
 		switch match.Status {
 		case game.RedWonMatch:
 			matchLogsList[i].ColorClass = "red"

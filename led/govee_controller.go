@@ -102,14 +102,8 @@ func (g *GoveeController) update(force bool) {
 		return
 	}
 
-	// Skip if Govee client is not enabled
-	if g.goveeClient == nil {
-		return
-	}
-	if !g.goveeClient.IsEnabled() {
-		g.mutex.Lock()
-		g.isHealthy = false
-		g.mutex.Unlock()
+	// Skip if Govee client is not enabled (but don't mark as unhealthy)
+	if g.goveeClient == nil || !g.goveeClient.IsEnabled() {
 		return
 	}
 

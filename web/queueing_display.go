@@ -6,11 +6,12 @@
 package web
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/Team254/cheesy-arena/field"
 	"github.com/Team254/cheesy-arena/model"
 	"github.com/Team254/cheesy-arena/websocket"
-	"net/http"
-	"time"
 )
 
 const (
@@ -57,10 +58,6 @@ func (web *Web) queueingDisplayMatchLoadHandler(w http.ResponseWriter, r *http.R
 
 	var upcomingMatches []model.Match
 	var redOffFieldTeamsByMatch, blueOffFieldTeamsByMatch [][]int
-	if err != nil {
-		handleWebErr(w, err)
-		return
-	}
 	for i, match := range matches {
 		if match.IsComplete() || match.TypeOrder < web.arena.CurrentMatch.TypeOrder {
 			continue

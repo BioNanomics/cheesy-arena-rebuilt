@@ -7,14 +7,15 @@ package field
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/game"
-	"github.com/Team254/cheesy-arena/model"
 	"image/color"
 	"log"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Team254/cheesy-arena/game"
+	"github.com/Team254/cheesy-arena/model"
 )
 
 // Represents a collection of team number and timer signs.
@@ -144,7 +145,7 @@ func (sign *TeamSign) SetId(id int) {
 	ipAddress := fmt.Sprintf("%s%d", teamSignAddressPrefix, id)
 
 	var err error
-	sign.udpConn, err = net.Dial("udp4", fmt.Sprintf("%s:%d", ipAddress, teamSignPort))
+	sign.udpConn, err = net.Dial("udp4", net.JoinHostPort(ipAddress, fmt.Sprintf("%d", teamSignPort)))
 	if err != nil {
 		log.Printf("Failed to connect to team sign at %s: %v", ipAddress, err)
 		return

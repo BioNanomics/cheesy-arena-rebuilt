@@ -4,8 +4,9 @@
 package model
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type validRecord struct {
@@ -15,7 +16,7 @@ type validRecord struct {
 }
 
 type manualIdRecord struct {
-	Id         int `db:"id,manual""`
+	Id         int `db:"id,manual"`
 	StringData string
 }
 

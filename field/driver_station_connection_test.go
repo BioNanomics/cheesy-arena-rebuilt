@@ -5,12 +5,13 @@ package field
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/Team254/cheesy-arena/network"
-	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/Team254/cheesy-arena/model"
+	"github.com/Team254/cheesy-arena/network"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEncodeControlPacket(t *testing.T) {
@@ -26,7 +27,7 @@ func TestEncodeControlPacket(t *testing.T) {
 	assert.Equal(t, byte(0), data[5])
 	assert.Equal(t, byte(0), data[6])
 	assert.Equal(t, byte(0), data[20])
-	assert.Equal(t, byte(15), data[21])
+	assert.Equal(t, byte(20), data[21]) // PreMatch shows AutoDurationSec = 20
 
 	// Check the different alliance station values.
 	dsConn.AllianceStation = "R2"
@@ -114,21 +115,22 @@ func TestEncodeControlPacket(t *testing.T) {
 	assert.Equal(t, byte(13), data[8])
 
 	// Check the countdown at different points during the match.
+	// 2026 REBUILT timing: Warmup=3s (test), Auto=20s, Pause=2s (test), Teleop=140s
 	arena.MatchState = AutoPeriod
 	arena.MatchStartTime = time.Now().Add(-time.Duration(4 * time.Second))
 	data = dsConn.encodeControlPacket(arena)
-	assert.Equal(t, byte(11), data[21])
+	assert.Equal(t, byte(16), data[21]) // 20-4 = 16 seconds remaining in auto
 	arena.MatchState = PausePeriod
 	arena.MatchStartTime = time.Now().Add(-time.Duration(16 * time.Second))
 	data = dsConn.encodeControlPacket(arena)
-	assert.Equal(t, byte(135), data[21])
+	assert.Equal(t, byte(140), data[21]) // During pause, shows TeleopDurationSec = 140
 	arena.MatchState = TeleopPeriod
 	arena.MatchStartTime = time.Now().Add(-time.Duration(33 * time.Second))
 	data = dsConn.encodeControlPacket(arena)
-	assert.Equal(t, byte(119), data[21])
+	assert.Equal(t, byte(129), data[21]) // 20+140+2-33 = 129 seconds remaining
 	arena.MatchStartTime = time.Now().Add(-time.Duration(150 * time.Second))
 	data = dsConn.encodeControlPacket(arena)
-	assert.Equal(t, byte(2), data[21])
+	assert.Equal(t, byte(12), data[21]) // 20+140+2-150 = 12 seconds remaining
 	arena.MatchState = PostMatch
 	arena.MatchStartTime = time.Now().Add(-time.Duration(180 * time.Second))
 	data = dsConn.encodeControlPacket(arena)

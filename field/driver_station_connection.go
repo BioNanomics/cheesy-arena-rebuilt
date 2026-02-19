@@ -79,7 +79,7 @@ func newDriverStationConnection(
 		udpSendPort = driverStationUdpSendPortLite
 	}
 
-	udpConn, err := net.Dial("udp4", fmt.Sprintf("%s:%d", ipAddress, udpSendPort))
+	udpConn, err := net.Dial("udp4", net.JoinHostPort(ipAddress, fmt.Sprintf("%d", udpSendPort)))
 	if err != nil {
 		return nil, err
 	}

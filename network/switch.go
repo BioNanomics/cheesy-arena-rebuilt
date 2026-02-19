@@ -9,10 +9,11 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/Team254/cheesy-arena/model"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/Team254/cheesy-arena/model"
 )
 
 const (
@@ -128,7 +129,7 @@ func (sw *Switch) ConfigureTeamEthernet(teams [6]*model.Team) error {
 // returns it as a string.
 func (sw *Switch) runCommand(command string) (string, error) {
 	// Open a Telnet connection to the switch.
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", sw.address, sw.port))
+	conn, err := net.Dial("tcp", net.JoinHostPort(sw.address, fmt.Sprintf("%d", sw.port)))
 	if err != nil {
 		return "", err
 	}

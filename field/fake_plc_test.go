@@ -10,7 +10,7 @@ import (
 )
 
 type FakePlc struct {
-	isEnabled             bool
+	address               string
 	fieldEStop            bool
 	redEStops             [3]bool
 	blueEStops            [3]bool
@@ -30,10 +30,11 @@ type FakePlc struct {
 }
 
 func (plc *FakePlc) SetAddress(address string) {
+	plc.address = address
 }
 
 func (plc *FakePlc) IsEnabled() bool {
-	return plc.isEnabled
+	return plc.address != ""
 }
 
 func (plc *FakePlc) IsHealthy() bool {

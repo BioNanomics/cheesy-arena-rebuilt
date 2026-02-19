@@ -6,15 +6,16 @@ package partner
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/Team254/cheesy-arena/game"
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Team254/cheesy-arena/game"
+	"github.com/Team254/cheesy-arena/model"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPublishTeams(t *testing.T) {
@@ -57,9 +58,9 @@ func TestPublishMatches(t *testing.T) {
 		Blue2:       11,
 		Blue3:       12,
 		Status:      game.RedWonMatch,
-		TbaMatchKey: model.TbaMatchKey{"qm", 0, 2},
+		TbaMatchKey: model.TbaMatchKey{CompLevel: "qm", SetNumber: 0, MatchNumber: 2},
 	}
-	match2 := model.Match{Type: model.Playoff, ShortName: "SF2-2", TbaMatchKey: model.TbaMatchKey{"omg", 5, 29}}
+	match2 := model.Match{Type: model.Playoff, ShortName: "SF2-2", TbaMatchKey: model.TbaMatchKey{CompLevel: "omg", SetNumber: 5, MatchNumber: 29}}
 	database.CreateMatch(&match1)
 	database.CreateMatch(&match2)
 	matchResult1 := model.BuildTestMatchResult(match1.Id, 1)
@@ -171,8 +172,8 @@ func TestPublishingErrors(t *testing.T) {
 func TestPublishAwards(t *testing.T) {
 	database := setupTestDb(t)
 
-	database.CreateAward(&model.Award{0, model.JudgedAward, "Saftey Award", 254, ""})
-	database.CreateAward(&model.Award{0, model.JudgedAward, "Spirt Award", 0, "Bob Dorough"})
+	database.CreateAward(&model.Award{Id: 0, Type: model.JudgedAward, AwardName: "Saftey Award", TeamId: 254, PersonName: ""})
+	database.CreateAward(&model.Award{Id: 0, Type: model.JudgedAward, AwardName: "Spirt Award", TeamId: 0, PersonName: "Bob Dorough"})
 
 	// Mock the TBA server.
 	tbaServer := httptest.NewServer(

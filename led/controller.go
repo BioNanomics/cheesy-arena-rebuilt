@@ -83,7 +83,7 @@ func (dmx *DmxController) SetAddress(address string) error {
 	dmx.Address = address
 	if address != "" {
 		var err error
-		if dmx.conn, err = net.Dial("udp4", fmt.Sprintf("%s:%d", address, sACNPort)); err != nil {
+		if dmx.conn, err = net.Dial("udp4", net.JoinHostPort(address, fmt.Sprintf("%d", sACNPort))); err != nil {
 			return err
 		}
 	}

@@ -5,6 +5,10 @@ package web
 
 import (
 	"bytes"
+	"log"
+	"testing"
+	"time"
+
 	"github.com/Team254/cheesy-arena/field"
 	"github.com/Team254/cheesy-arena/game"
 	"github.com/Team254/cheesy-arena/model"
@@ -13,9 +17,6 @@ import (
 	gorillawebsocket "github.com/gorilla/websocket"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"
-	"log"
-	"testing"
-	"time"
 )
 
 func TestMatchPlay(t *testing.T) {
@@ -57,7 +58,7 @@ func TestCommitMatch(t *testing.T) {
 	// Committing test match should update the stored saved match but not persist anything.
 	match := &model.Match{Id: 0, Type: model.Test, Red1: 101, Red2: 102, Red3: 103, Blue1: 104, Blue2: 105, Blue3: 106}
 	matchResult := &model.MatchResult{MatchId: match.Id, RedScore: &game.Score{}, BlueScore: &game.Score{}}
-	matchResult.BlueScore.LeaveStatuses[2] = true
+	matchResult.BlueScore.ActiveFuel = 10
 	err := web.commitMatchScore(match, matchResult, false)
 	assert.Nil(t, err)
 	matchResult, err = web.arena.Database.GetMatchResultForMatch(match.Id)
@@ -71,7 +72,7 @@ func TestCommitMatch(t *testing.T) {
 	assert.Nil(t, web.arena.Database.CreateMatch(match))
 	matchResult = model.NewMatchResult()
 	matchResult.MatchId = match.Id
-	matchResult.BlueScore = &game.Score{LeaveStatuses: [3]bool{true, false, false}}
+	matchResult.BlueScore = &game.Score{ActiveFuel: 50}
 	err = web.commitMatchScore(match, matchResult, true)
 	assert.Nil(t, err)
 	assert.Equal(t, 1, matchResult.PlayNumber)
@@ -80,7 +81,7 @@ func TestCommitMatch(t *testing.T) {
 
 	matchResult = model.NewMatchResult()
 	matchResult.MatchId = match.Id
-	matchResult.RedScore = &game.Score{LeaveStatuses: [3]bool{true, false, true}}
+	matchResult.RedScore = &game.Score{ActiveFuel: 100}
 	err = web.commitMatchScore(match, matchResult, true)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, matchResult.PlayNumber)
@@ -126,11 +127,11 @@ func TestCommitTiebreak(t *testing.T) {
 		MatchId: match.Id,
 		// These should all be fields that aren't part of the tiebreaker.
 		RedScore: &game.Score{
-			Reef:  game.Reef{TroughFar: 1},
-			Fouls: []game.Foul{{FoulId: 1, IsMajor: false}, {FoulId: 2, IsMajor: false}},
+			InactiveFuel: 10, // InactiveFuel doesn't count for RPs or tiebreakers
+			Fouls:        []game.Foul{{FoulId: 1, IsMajor: false}, {FoulId: 2, IsMajor: false}},
 		},
 		BlueScore: &game.Score{
-			Fouls: []game.Foul{{FoulId: 3, IsMajor: false}},
+			Fouls: []game.Foul{{FoulId: 3, IsMajor: false}, {FoulId: 4, IsMajor: false}},
 		},
 	}
 
@@ -155,7 +156,8 @@ func TestCommitTiebreak(t *testing.T) {
 	assert.Equal(t, game.TieMatch, match.Status)
 
 	// Change the score to still be equal nominally but trigger the tiebreaker criteria.
-	matchResult.BlueScore.ProcessorAlgae = 1
+	matchResult.BlueScore.AutoFuel = 5 // Give blue more auto points to win tiebreaker
+	matchResult.RedScore.Fouls = []game.Foul{{FoulId: 1, IsMajor: false}, {FoulId: 2, IsMajor: false}, {FoulId: 5, IsMajor: false}}
 	matchResult.BlueScore.Fouls = []game.Foul{{FoulId: 3, IsMajor: false}, {FoulId: 4, IsMajor: true}}
 
 	// Sanity check that the test scores are equal; they will need to be updated accordingly for each new game.
@@ -334,12 +336,12 @@ func TestMatchPlayWebsocketCommands(t *testing.T) {
 	ws.Write("abortMatch", nil)
 	readWebsocketType(t, ws, "audienceDisplayMode")
 	assert.Equal(t, field.PostMatch, web.arena.MatchState)
-	web.arena.RedRealtimeScore.CurrentScore.BargeAlgae = 6
-	web.arena.BlueRealtimeScore.CurrentScore.LeaveStatuses = [3]bool{true, false, true}
+	web.arena.RedRealtimeScore.CurrentScore.ActiveFuel = 60
+	web.arena.BlueRealtimeScore.CurrentScore.AutoFuel = 15
 	ws.Write("commitResults", nil)
 	readWebsocketMultiple(t, ws, 5) // scorePosted, matchLoad, realtimeScore, allianceStationDisplayMode, scoringStatus
-	assert.Equal(t, 6, web.arena.SavedMatchResult.RedScore.BargeAlgae)
-	assert.Equal(t, [3]bool{true, false, true}, web.arena.SavedMatchResult.BlueScore.LeaveStatuses)
+	assert.Equal(t, 60, web.arena.SavedMatchResult.RedScore.ActiveFuel)
+	assert.Equal(t, 15, web.arena.SavedMatchResult.BlueScore.AutoFuel)
 	assert.Equal(t, field.PreMatch, web.arena.MatchState)
 	ws.Write("discardResults", nil)
 	readWebsocketMultiple(t, ws, 4) // matchLoad, realtimeScore, allianceStationDisplayMode, scoringStatus
