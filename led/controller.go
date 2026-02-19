@@ -1,7 +1,7 @@
 // Copyright 2025 Team 254. All Rights Reserved.
 // Author: kwaremburg
 //
-// DMX controller interface for controlling RGB light bars in the hubs.
+// LED controller interface and implementations for controlling RGB light bars in the hubs.
 
 package led
 
@@ -31,15 +31,39 @@ func (c Color) Equals(other Color) bool {
 
 // Predefined colors for different states
 var (
-	ColorOff    = Color{0, 0, 0}     // Off (inactive hub)
-	ColorGreen  = Color{0, 255, 0}   // Green (field safe)
-	ColorPurple = Color{128, 0, 128} // Purple (counting after match)
-	ColorRed    = Color{255, 0, 0}   // Red (red alliance active hub)
-	ColorBlue   = Color{0, 0, 255}   // Blue (blue alliance active hub)
+	ColorOff    = Color{0, 0, 0}       // Off (inactive hub)
+	ColorGreen  = Color{0, 255, 0}     // Green (field safe)
+	ColorPurple = Color{128, 0, 128}   // Purple (counting after match)
+	ColorRed    = Color{255, 0, 0}     // Red (red alliance active hub)
+	ColorBlue   = Color{0, 0, 255}     // Blue (blue alliance active hub)
+	ColorWhite  = Color{255, 255, 255} // White (for chase animations)
 )
 
-// Controller implements the DMX light control for sACN E1.31 over Ethernet.
-type Controller struct {
+// LedController defines the interface for controlling LED lighting systems.
+// Implementations include DMX/sACN controllers and Govee smart LED controllers.
+type LedController interface {
+	// SetAddress configures the controller's target address (IP for DMX, device ID for Govee)
+	SetAddress(address string) error
+
+	// SetColor sets the desired color for the LED
+	SetColor(color Color)
+
+	// GetColor returns the current color setting
+	GetColor() Color
+
+	// Update sends the current color to the physical device
+	Update()
+
+	// Close releases any resources held by the controller
+	Close()
+
+	// IsHealthy returns whether the controller is functioning properly
+	IsHealthy() bool
+}
+
+// DmxController implements the LedController interface for DMX/sACN E1.31 over Ethernet.
+// This was previously named "Controller" and provides backward compatibility.
+type DmxController struct {
 	Address      string
 	Universe     int
 	conn         net.Conn
@@ -50,7 +74,7 @@ type Controller struct {
 	packet       []byte
 }
 
-func (dmx *Controller) SetAddress(address string) error {
+func (dmx *DmxController) SetAddress(address string) error {
 	if dmx.conn != nil {
 		dmx.conn.Close()
 		dmx.conn = nil
@@ -67,22 +91,27 @@ func (dmx *Controller) SetAddress(address string) error {
 	return nil
 }
 
-func (dmx *Controller) SetColor(color Color) {
+func (dmx *DmxController) SetColor(color Color) {
 	dmx.color = color
 }
 
-func (dmx *Controller) GetColor() Color {
+func (dmx *DmxController) GetColor() Color {
 	return dmx.color
 }
 
-func (dmx *Controller) Close() {
+func (dmx *DmxController) Close() {
 	if dmx.conn != nil {
 		dmx.conn.Close()
 		dmx.conn = nil
 	}
 }
 
-func (dmx *Controller) Update() {
+func (dmx *DmxController) IsHealthy() bool {
+	// DMX controller is healthy if it has a connection or is not configured
+	return dmx.conn != nil || dmx.Address == ""
+}
+
+func (dmx *DmxController) Update() {
 	color := dmx.color
 
 	if dmx.conn == nil {
@@ -107,14 +136,14 @@ func (dmx *Controller) Update() {
 	}
 }
 
-func (dmx *Controller) shouldSendPacket(color Color) bool {
+func (dmx *DmxController) shouldSendPacket(color Color) bool {
 	if !color.Equals(dmx.lastColor) {
 		return true
 	}
 	return time.Since(dmx.lastSend) >= heartbeatInterval
 }
 
-func (dmx *Controller) populatePacket(color Color, startChannel int) {
+func (dmx *DmxController) populatePacket(color Color, startChannel int) {
 	// Clear DMX data area
 	for i := pixelDataOffset; i < len(dmx.packet); i++ {
 		dmx.packet[i] = 0
@@ -129,13 +158,17 @@ func (dmx *Controller) populatePacket(color Color, startChannel int) {
 	dmx.packet[pixelDataOffset+startChannel-1+2] = color.B
 }
 
-func (dmx *Controller) sendPacket(universe int) error {
+func (dmx *DmxController) sendPacket(universe int) error {
 	dmx.packet[111]++ // Sequence number
 	dmx.packet[113] = byte(universe >> 8)
 	dmx.packet[114] = byte(universe & 0xff)
 	_, err := dmx.conn.Write(dmx.packet)
 	return err
 }
+
+// Controller is an alias for DmxController for backward compatibility.
+// Deprecated: Use DmxController directly.
+type Controller = DmxController
 
 func putFlagsLength(pkt []byte, off int, pduLen int) {
 	fl := 0x7000 | (pduLen & 0x0FFF)

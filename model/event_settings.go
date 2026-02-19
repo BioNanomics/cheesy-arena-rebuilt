@@ -67,6 +67,11 @@ type EventSettings struct {
 	SCCDownCommands                  string
 	PlcAddress                       string
 	DMXAddress                       string
+	LedControllerType                string // "dmx" or "govee"
+	RedLedAddress                    string // DMX: IP address, Govee: Device MAC
+	BlueLedAddress                   string // DMX: IP address, Govee: Device MAC
+	RedLedDeviceId                   string // Govee: Device MAC (deprecated, use RedLedAddress)
+	BlueLedDeviceId                  string // Govee: Device MAC (deprecated, use BlueLedAddress)
 	AdminPassword                    string
 	TeamSignRed1Id                   int
 	TeamSignRed2Id                   int
@@ -148,6 +153,11 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 		SuperchargedRPThreshold:     game.SuperchargedRPThreshold,
 		TraversalRPThreshold:        game.TraversalRPThreshold,
 		DMXAddress:                  "10.0.100.80",
+		LedControllerType:           "dmx", // Default to DMX for backward compatibility
+		RedLedAddress:               "",
+		BlueLedAddress:              "",
+		RedLedDeviceId:              "",
+		BlueLedDeviceId:             "",
 	}
 
 	if err := database.eventSettingsTable.create(&eventSettings); err != nil {

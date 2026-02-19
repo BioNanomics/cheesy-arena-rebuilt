@@ -61,8 +61,9 @@ type Arena struct {
 	redSCC           *network.SCCSwitch
 	blueSCC          *network.SCCSwitch
 	Plc              plc.Plc
-	RedHubLeds       led.Controller
-	BlueHubLeds      led.Controller
+	RedHubLeds       led.LedController
+	BlueHubLeds      led.LedController
+	GoveeClient      *partner.GoveeClient
 	TbaClient        *partner.TbaClient
 	NexusClient      *partner.NexusClient
 	BlackmagicClient *partner.BlackmagicClient
@@ -97,6 +98,7 @@ type Arena struct {
 	LowerThird                        *model.LowerThird
 	ShowLowerThird                    bool
 	MuteMatchSounds                   bool
+	LedTestMode                       bool // When true, arena loop won't update LED colors
 	matchAborted                      bool
 	soundsPlayed                      map[*game.MatchSound]struct{}
 	breakDescription                  string
@@ -122,8 +124,13 @@ func NewArena(dbPath string) (*Arena, error) {
 	arena.configureNotifiers()
 	arena.Plc = new(plc.ModbusPlc)
 
-	arena.RedHubLeds = led.Controller{Universe: 1, StartChannel: 1}
-	arena.BlueHubLeds = led.Controller{Universe: 2, StartChannel: 1}
+	// Initialize Govee client
+	arena.GoveeClient = partner.NewGoveeClient()
+
+	// Initialize LED controllers with default DMX configuration
+	// These will be reconfigured based on settings in InitializeLedControllers
+	arena.RedHubLeds = &led.DmxController{Universe: 1, StartChannel: 1}
+	arena.BlueHubLeds = &led.DmxController{Universe: 2, StartChannel: 1}
 
 	arena.AllianceStations = make(map[string]*AllianceStation)
 	arena.AllianceStations["R1"] = new(AllianceStation)
@@ -214,8 +221,12 @@ func (arena *Arena) LoadSettings() error {
 		sccDownCommands,
 	)
 	arena.Plc.SetAddress(settings.PlcAddress)
-	arena.RedHubLeds.SetAddress(settings.DMXAddress)
-	arena.BlueHubLeds.SetAddress(settings.DMXAddress)
+
+	// Initialize LED controllers based on settings
+	if err := arena.InitializeLedControllers(); err != nil {
+		log.Printf("Warning: Failed to initialize LED controllers: %v", err)
+	}
+
 	arena.TbaClient = partner.NewTbaClient(settings.TbaEventCode, settings.TbaSecretId, settings.TbaSecret)
 	arena.NexusClient = partner.NewNexusClient(settings.TbaEventCode)
 	arena.BlackmagicClient = partner.NewBlackmagicClient(settings.BlackmagicAddresses)
@@ -292,6 +303,87 @@ func (arena *Arena) LoadSettings() error {
 	}
 	if err = arena.UpdatePlayoffTournament(); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// InitializeLedControllers configures the LED controllers based on event settings.
+func (arena *Arena) InitializeLedControllers() error {
+	settings := arena.EventSettings
+
+	// Close existing controllers
+	if arena.RedHubLeds != nil {
+		arena.RedHubLeds.Close()
+	}
+	if arena.BlueHubLeds != nil {
+		arena.BlueHubLeds.Close()
+	}
+
+	// Determine controller type (default to DMX for backward compatibility)
+	controllerType := settings.LedControllerType
+	if controllerType == "" {
+		controllerType = "dmx"
+	}
+
+	// Initialize controllers based on type
+	if controllerType == "govee" {
+		// Use Govee controllers
+		redDeviceId := settings.RedLedAddress
+		if redDeviceId == "" {
+			redDeviceId = settings.RedLedDeviceId // Fallback to deprecated field
+		}
+		blueDeviceId := settings.BlueLedAddress
+		if blueDeviceId == "" {
+			blueDeviceId = settings.BlueLedDeviceId // Fallback to deprecated field
+		}
+
+		arena.RedHubLeds = led.NewGoveeController(redDeviceId, arena.GoveeClient)
+		arena.BlueHubLeds = led.NewGoveeController(blueDeviceId, arena.GoveeClient)
+
+		// Start discovery if not already running (needed for testing from setup page)
+		if arena.GoveeClient != nil {
+			if !arena.GoveeClient.IsEnabled() {
+				// Discovery not running yet, start it
+				go func() {
+					if err := arena.GoveeClient.StartDiscovery(); err != nil {
+						log.Printf("[LED] Warning: Failed to start Govee discovery: %v", err)
+					} else {
+						log.Println("[LED] Govee device discovery started")
+					}
+				}()
+			}
+
+			// Always set discovery ready flag after a delay (whether we just started discovery or it was already running)
+			go func() {
+				time.Sleep(3 * time.Second)
+				arena.GoveeClient.SetDiscoveryReady()
+				log.Println("[LED] Initial device discovery complete")
+			}()
+		}
+
+		log.Printf("[LED] Initialized Govee controllers (Red: %s, Blue: %s)", redDeviceId, blueDeviceId)
+	} else {
+		// Use DMX controllers (default)
+		dmxAddress := settings.DMXAddress
+		if dmxAddress == "" && settings.RedLedAddress != "" {
+			dmxAddress = settings.RedLedAddress // Use new field if available
+		}
+
+		redController := &led.DmxController{Universe: 1, StartChannel: 1}
+		blueController := &led.DmxController{Universe: 2, StartChannel: 1}
+
+		if err := redController.SetAddress(dmxAddress); err != nil {
+			log.Printf("[LED] Warning: Failed to set red DMX address: %v", err)
+		}
+		if err := blueController.SetAddress(dmxAddress); err != nil {
+			log.Printf("[LED] Warning: Failed to set blue DMX address: %v", err)
+		}
+
+		arena.RedHubLeds = redController
+		arena.BlueHubLeds = blueController
+
+		log.Printf("[LED] Initialized DMX controllers (Address: %s)", dmxAddress)
 	}
 
 	return nil
@@ -518,7 +610,7 @@ func (arena *Arena) StartMatch() error {
 
 			// Save the teams that have successfully connected to the field.
 			if allianceStation.Team != nil && !allianceStation.Team.HasConnected && allianceStation.DsConn != nil &&
-			  allianceStation.DsConn.RobotLinked {
+				allianceStation.DsConn.RobotLinked {
 				allianceStation.Team.HasConnected = true
 				arena.Database.UpdateTeam(allianceStation.Team)
 			}
@@ -793,7 +885,7 @@ func (arena *Arena) checkEndgameStart(matchTimeSec float64) {
 	// Calculate the time when endgame warning should start
 	endgameStartTime := float64(
 		game.MatchTiming.AutoDurationSec + game.MatchTiming.PauseDurationSec +
-		  game.MatchTiming.TeleopDurationSec - game.MatchTiming.WarningRemainingDurationSec,
+			game.MatchTiming.TeleopDurationSec - game.MatchTiming.WarningRemainingDurationSec,
 	)
 
 	// Check if we've crossed the endgame threshold and haven't already triggered it
@@ -804,6 +896,25 @@ func (arena *Arena) checkEndgameStart(matchTimeSec float64) {
 
 // Loops indefinitely to track and update the arena components.
 func (arena *Arena) Run() {
+	// Start Govee device discovery if using Govee controllers
+	if arena.GoveeClient != nil && arena.EventSettings.LedControllerType == "govee" {
+		if err := arena.GoveeClient.StartDiscovery(); err != nil {
+			log.Printf("Warning: Failed to start Govee discovery: %v", err)
+		} else {
+			log.Println("[Govee] Device discovery started")
+			// Mark discovery as ready after a brief delay to allow initial device discovery
+			go func() {
+				time.Sleep(3 * time.Second)
+				arena.GoveeClient.SetDiscoveryReady()
+				log.Println("[Govee] Initial device discovery complete")
+			}()
+			defer func() {
+				arena.GoveeClient.StopDiscovery()
+				log.Println("[Govee] Device discovery stopped")
+			}()
+		}
+	}
+
 	// Start other loops in goroutines.
 	go arena.listenForDriverStations()
 	go arena.listenForDsUdpPackets()
@@ -1050,7 +1161,7 @@ func (arena *Arena) sendDsPacket(auto bool, enabled bool) {
 		if dsConn != nil {
 			dsConn.Auto = auto
 			dsConn.Enabled = enabled && !allianceStation.EStop && !(auto && allianceStation.AStop) &&
-			  !allianceStation.Bypass
+				!allianceStation.Bypass
 			dsConn.EStop = allianceStation.EStop
 			dsConn.AStop = allianceStation.AStop
 			err := dsConn.update(arena)
@@ -1195,8 +1306,8 @@ func (arena *Arena) handlePlcInputOutput() {
 			arena.Plc.SetFieldResetLight(true)
 		}
 		scoreReady := arena.RedRealtimeScore.FoulsCommitted && arena.BlueRealtimeScore.FoulsCommitted &&
-		  arena.positionPostMatchScoreReady("red_near") && arena.positionPostMatchScoreReady("red_far") &&
-		  arena.positionPostMatchScoreReady("blue_near") && arena.positionPostMatchScoreReady("blue_far")
+			arena.positionPostMatchScoreReady("red_near") && arena.positionPostMatchScoreReady("red_far") &&
+			arena.positionPostMatchScoreReady("blue_near") && arena.positionPostMatchScoreReady("blue_far")
 		arena.Plc.SetStackLights(false, false, !scoreReady, false)
 
 		// Keep hub motors on for 3 seconds after the match ends.
@@ -1214,7 +1325,7 @@ func (arena *Arena) handlePlcInputOutput() {
 	// For REBUILT: Get hub FUEL counts from PLC and route to active/inactive based on which hub is active.
 	// The PLC provides cumulative counts, so we calculate deltas from the current score totals.
 	if arena.MatchState == AutoPeriod || arena.MatchState == PausePeriod || arena.MatchState == TeleopPeriod ||
-	  inGracePeriod {
+		inGracePeriod {
 		redHubFuel, blueHubFuel := arena.Plc.GetHubBallCounts()
 
 		// Calculate the delta since last read using current score totals
@@ -1285,11 +1396,6 @@ func (arena *Arena) handlePlcInputOutput() {
 			shouldFlash = true
 		}
 
-		// Flash during last 3 seconds of transition period
-		if matchTimeSec >= transitionEndSec-3.0 && matchTimeSec < transitionEndSec {
-			shouldFlash = true
-		}
-
 		// Flash during last 3 seconds of each shift (during teleop, not in END GAME)
 		if matchTimeSec >= transitionEndSec && matchTimeSec < teleopEndSec-float64(game.EndGameDurationSec) {
 			postTransitionSec := matchTimeSec - transitionEndSec
@@ -1302,8 +1408,8 @@ func (arena *Arena) handlePlcInputOutput() {
 		redLight := redHubActive
 		blueLight := blueHubActive
 		if shouldFlash {
-			// Flash the currently active hub(s) at 2Hz (0.5 second period = on for 0.25s, off for 0.25s)
-			flashOn := int(matchTimeSec*4)%2 == 0
+			// Flash the currently active hub(s) at 1Hz (1 second period = on for 0.5s, off for 0.5s)
+			flashOn := int(matchTimeSec*2)%2 == 0
 			if redHubActive {
 				redLight = flashOn
 			}
@@ -1324,6 +1430,12 @@ func (arena *Arena) handlePlcInputOutput() {
 
 // Updates the DMX light bars based on match state and hub activation.
 func (arena *Arena) handleHubLights() {
+	// Skip LED updates if in test mode
+	if arena.LedTestMode {
+		log.Printf("[Arena] Skipping handleHubLights - LedTestMode is true")
+		return
+	}
+
 	// Handle the hub lights based on match state.
 	if arena.MatchState == AutoPeriod || arena.MatchState == PausePeriod || arena.MatchState == TeleopPeriod {
 		// Determine who won auto to know which hub is active
@@ -1341,11 +1453,6 @@ func (arena *Arena) handleHubLights() {
 
 		// Flash during last 3 seconds of match
 		if matchTimeSec >= teleopEndSec-3.0 && matchTimeSec < teleopEndSec {
-			shouldFlash = true
-		}
-
-		// Flash during last 3 seconds of transition period
-		if matchTimeSec >= transitionEndSec-3.0 && matchTimeSec < transitionEndSec {
 			shouldFlash = true
 		}
 
@@ -1398,7 +1505,12 @@ func (arena *Arena) handleHubLights() {
 func (arena *Arena) setLedHubColors(redHubActive, blueHubActive, shouldFlash bool, matchTimeSec float64) {
 	var redColor, blueColor led.Color
 
-	// Determine colors based on hub state
+	// Calculate transition period timing
+	teleopStartSec := float64(game.MatchTiming.WarmupDurationSec + game.MatchTiming.AutoDurationSec + game.MatchTiming.PauseDurationSec)
+	transitionEndSec := teleopStartSec + float64(game.TransitionDurationSec)
+	inTransitionPeriod := matchTimeSec >= teleopStartSec && matchTimeSec < transitionEndSec
+
+	// Determine base colors based on hub state
 	if redHubActive {
 		redColor = led.ColorRed // Red alliance color when active
 	} else {
@@ -1411,29 +1523,37 @@ func (arena *Arena) setLedHubColors(redHubActive, blueHubActive, shouldFlash boo
 		blueColor = led.ColorOff // Off when inactive
 	}
 
-	// Apply flashing/ramping if needed
-	if shouldFlash {
-		// Ramp: Dim over 0.5s, then brighten over 0.5s (1Hz cycle)
-		// matchTimeSec % 1.0 gives time within the current second [0.0, 1.0)
+	// Apply white chase animation during transition period
+	if inTransitionPeriod {
+		// Chase pattern: alternate between white and alliance color at 1Hz (1.0s cycle)
+		// Slower animation works better with Govee hardware throttling (50ms update interval)
 		timeInCycle := math.Mod(matchTimeSec, 1.0)
-		var multiplier float64
-		if timeInCycle < 0.5 {
-			// Dimming: 1.0 down to 0.0
-			multiplier = 1.0 - (timeInCycle / 0.5)
-		} else {
-			// Brightening: 0.0 up to 1.0
-			multiplier = (timeInCycle - 0.5) / 0.5
-		}
+		showWhite := timeInCycle < 0.5 // White for first 0.5s, alliance color for next 0.5s
 
-		if redHubActive {
-			redColor.R = uint8(float64(redColor.R) * multiplier)
-			redColor.G = uint8(float64(redColor.G) * multiplier)
-			redColor.B = uint8(float64(redColor.B) * multiplier)
+		if showWhite {
+			if redHubActive {
+				redColor = led.ColorWhite
+			}
+			if blueHubActive {
+				blueColor = led.ColorWhite
+			}
 		}
-		if blueHubActive {
-			blueColor.R = uint8(float64(blueColor.R) * multiplier)
-			blueColor.G = uint8(float64(blueColor.G) * multiplier)
-			blueColor.B = uint8(float64(blueColor.B) * multiplier)
+	} else if shouldFlash {
+		// Apply flashing for non-transition periods
+		// Flash pattern: 0.5s BRIGHT, 0.5s DIM (1 second cycle = 1Hz)
+		// Dim to 10% brightness to create a very noticeable pulse effect
+		timeInCycle := math.Mod(matchTimeSec, 1.0)
+		flashDim := timeInCycle >= 0.5 // BRIGHT for first 0.5s, DIM for next 0.5s
+
+		if flashDim {
+			if redHubActive {
+				// Dim red to 10% brightness (25 out of 255)
+				redColor = led.Color{R: 25, G: 0, B: 0}
+			}
+			if blueHubActive {
+				// Dim blue to 10% brightness (25 out of 255)
+				blueColor = led.Color{R: 0, G: 0, B: 25}
+			}
 		}
 	}
 

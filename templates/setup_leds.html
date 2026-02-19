@@ -1,0 +1,271 @@
+{{/*
+Copyright 2026 Team 254. All Rights Reserved.
+Author: Integration Team
+
+UI for configuring LED controllers (DMX and Govee).
+*/}}
+{{define "title"}}LED Setup{{end}}
+{{define "body"}}
+<div class="row justify-content-center">
+  <div class="col-lg-10">
+    <div class="card card-body bg-body-tertiary">
+      <legend>LED Controller Configuration</legend>
+      <form method="POST" action="/setup/leds">
+        <div class="row mb-3">
+          <label class="col-sm-3 col-form-label">Controller Type</label>
+          <div class="col-sm-9">
+            <select class="form-select" name="ledControllerType" id="ledControllerType">
+              <option value="dmx" {{if eq .ControllerType "dmx"}}selected{{end}}>DMX/sACN (Professional Lighting)</option>
+              <option value="govee" {{if eq .ControllerType "govee"}}selected{{end}}>Govee Smart LEDs (WiFi)</option>
+            </select>
+            <div class="form-text">Select the type of LED controller to use for hub lighting.</div>
+          </div>
+        </div>
+
+        <div id="dmxConfig" style="display: none;">
+          <div class="row mb-3">
+            <label class="col-sm-3 col-form-label">DMX Controller IP</label>
+            <div class="col-sm-9">
+              <input type="text" class="form-control" name="dmxAddress" value="{{.DMXAddress}}" placeholder="10.0.100.80">
+              <div class="form-text">IP address of the sACN/E1.31 DMX controller (both hubs use same controller).</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="goveeConfig" style="display: none;">
+          <div class="row mb-3">
+            <label class="col-sm-3 col-form-label">Red Hub Device</label>
+            <div class="col-sm-9">
+              <div class="input-group">
+                <input type="text" class="form-control" name="redLedAddress" id="redLedAddress" value="{{.RedLedAddress}}" placeholder="AA:BB:CC:DD:EE:FF:00:00">
+                <button type="button" class="btn btn-secondary" onclick="discoverDevices('red');">
+                  <i class="bi-search"></i> Discover
+                </button>
+              </div>
+              <div class="form-text">MAC address of the Govee device for the red alliance hub.</div>
+            </div>
+          </div>
+
+          <div class="row mb-3">
+            <label class="col-sm-3 col-form-label">Blue Hub Device</label>
+            <div class="col-sm-9">
+              <div class="input-group">
+                <input type="text" class="form-control" name="blueLedAddress" id="blueLedAddress" value="{{.BlueLedAddress}}" placeholder="AA:BB:CC:DD:EE:FF:00:00">
+                <button type="button" class="btn btn-secondary" onclick="discoverDevices('blue');">
+                  <i class="bi-search"></i> Discover
+                </button>
+              </div>
+              <div class="form-text">MAC address of the Govee device for the blue alliance hub.</div>
+            </div>
+          </div>
+
+          <div id="discoveredDevices" class="alert alert-info" style="display: none;">
+            <strong>Discovered Devices:</strong>
+            <ul id="deviceList"></ul>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-sm-9 offset-sm-3">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi-check-lg"></i> Save Configuration
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="card card-body bg-body-tertiary mt-3">
+      <legend>LED Testing</legend>
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <h5>Red Hub LED
+            <span class="badge {{if .RedHealthy}}bg-success{{else}}bg-danger{{end}}" id="redHealthBadge">
+              {{if .RedHealthy}}Healthy{{else}}Unhealthy{{end}}
+            </span>
+          </h5>
+          <div class="btn-group" role="group">
+            <button type="button" class="btn btn-sm btn-danger" onclick="testLed('red', 'red');">Red</button>
+            <button type="button" class="btn btn-sm btn-primary" onclick="testLed('red', 'blue');">Blue</button>
+            <button type="button" class="btn btn-sm btn-success" onclick="testLed('red', 'green');">Green</button>
+            <button type="button" class="btn btn-sm btn-secondary" style="background-color: purple;" onclick="testLed('red', 'purple');">Purple</button>
+            <button type="button" class="btn btn-sm btn-dark" onclick="testLed('red', 'off');">Off</button>
+          </div>
+          <div class="mt-2">
+            <small>Current: <span id="redCurrentColor">rgb(0, 0, 0)</span></small>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <h5>Blue Hub LED
+            <span class="badge {{if .BlueHealthy}}bg-success{{else}}bg-danger{{end}}" id="blueHealthBadge">
+              {{if .BlueHealthy}}Healthy{{else}}Unhealthy{{end}}
+            </span>
+          </h5>
+          <div class="btn-group" role="group">
+            <button type="button" class="btn btn-sm btn-danger" onclick="testLed('blue', 'red');">Red</button>
+            <button type="button" class="btn btn-sm btn-primary" onclick="testLed('blue', 'blue');">Blue</button>
+            <button type="button" class="btn btn-sm btn-success" onclick="testLed('blue', 'green');">Green</button>
+            <button type="button" class="btn btn-sm btn-secondary" style="background-color: purple;" onclick="testLed('blue', 'purple');">Purple</button>
+            <button type="button" class="btn btn-sm btn-dark" onclick="testLed('blue', 'off');">Off</button>
+          </div>
+          <div class="mt-2">
+            <small>Current: <span id="blueCurrentColor">rgb(0, 0, 0)</span></small>
+          </div>
+        </div>
+      </div>
+
+      <div class="alert alert-warning">
+        <i class="bi-exclamation-triangle-fill"></i>
+        <strong>Note:</strong> LED testing will temporarily override the current match state. 
+        LEDs will return to normal operation during the next match phase transition.
+      </div>
+    </div>
+
+    <div class="card card-body bg-body-tertiary mt-3">
+      <legend>Configuration Notes</legend>
+      <h5>DMX/sACN Controllers</h5>
+      <ul>
+        <li>Professional lighting control using E1.31 protocol over Ethernet</li>
+        <li>Requires compatible DMX controller (e.g., sACN to DMX bridge)</li>
+        <li>Red hub uses Universe 1, Blue hub uses Universe 2</li>
+        <li>Both hubs connect to the same controller IP address</li>
+        <li>Reliable, low-latency, suitable for official events</li>
+      </ul>
+
+      <h5>Govee Smart LEDs</h5>
+      <ul>
+        <li>Consumer WiFi-based smart LED strips (H6159, H6163, H6182, etc.)</li>
+        <li>Uses Govee LAN protocol over UDP multicast</li>
+        <li>Each hub requires a separate Govee device</li>
+        <li>Devices must be on the same network as Cheesy Arena</li>
+        <li>Cost-effective option for practice fields and off-season events</li>
+        <li>May experience occasional packet loss over WiFi (retry logic included)</li>
+        <li><strong>Important:</strong> Device IDs are in 8-byte format (e.g., "AA:BB:CC:DD:EE:FF:00:00"), NOT the 6-byte MAC from the Govee app. Use the "Discover" button to find the correct device IDs.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{{end}}
+{{define "script"}}
+<script>
+  var websocket;
+
+  $(function() {
+    // Show/hide configuration sections based on controller type
+    updateConfigVisibility();
+    $("#ledControllerType").change(updateConfigVisibility);
+
+    // Connect to websocket for real-time updates
+    websocket = new CheesyWebsocket("/setup/leds/websocket", {
+      devices: function(data) {
+        displayDiscoveredDevices(data);
+      },
+      status: function(data) {
+        updateStatus(data);
+      },
+      testComplete: function(data) {
+        console.log("Test complete");
+      }
+    });
+  });
+
+  function updateConfigVisibility() {
+    var controllerType = $("#ledControllerType").val();
+    if (controllerType === "dmx") {
+      $("#dmxConfig").show();
+      $("#goveeConfig").hide();
+    } else {
+      $("#dmxConfig").hide();
+      $("#goveeConfig").show();
+    }
+  }
+
+  var currentDiscoveryHub = null; // Track which hub discovery was initiated for
+
+  function discoverDevices(hub) {
+    currentDiscoveryHub = hub; // Store which hub ('red' or 'blue') we're discovering for
+    $("#discoveredDevices").hide();
+    $("#deviceList").empty();
+
+    // Request device discovery via HTTP
+    $.get("/setup/leds/discover", function(devices) {
+      displayDiscoveredDevices(devices, hub);
+    }).fail(function() {
+      alert("Failed to discover devices. Make sure Govee devices are powered on and connected to the network.");
+    });
+  }
+
+  function displayDiscoveredDevices(devices, hub) {
+    if (!devices || devices.length === 0) {
+      $("#deviceList").html("<li>No devices found. Make sure devices are powered on and on the same network.</li>");
+    } else {
+      $("#deviceList").empty();
+      devices.forEach(function(device) {
+        var deviceItem = $("<li></li>");
+        var deviceLink = $("<a href='#'></a>")
+          .text(device.deviceId + " (" + device.sku + " @ " + device.ip + ")")
+          .click(function(e) {
+            e.preventDefault();
+            // Populate the correct field based on which hub discovery was initiated for
+            if (hub === 'red') {
+              $("#redLedAddress").val(device.deviceId);
+            } else if (hub === 'blue') {
+              $("#blueLedAddress").val(device.deviceId);
+            }
+          });
+        deviceItem.append(deviceLink);
+        $("#deviceList").append(deviceItem);
+      });
+    }
+    $("#discoveredDevices").show();
+  }
+
+  function testLed(hub, color) {
+    $.post("/setup/leds/test", {
+      hub: hub,
+      color: color
+    }).done(function() {
+      console.log("LED test sent: " + hub + " -> " + color);
+      // Request status update
+      setTimeout(function() {
+        websocket.send("getStatus", {});
+      }, 100);
+    }).fail(function() {
+      alert("Failed to test LED");
+    });
+  }
+
+  function updateStatus(data) {
+    // Update health badges
+    if (data.redHealthy) {
+      $("#redHealthBadge").removeClass("bg-danger").addClass("bg-success").text("Healthy");
+    } else {
+      $("#redHealthBadge").removeClass("bg-success").addClass("bg-danger").text("Unhealthy");
+    }
+
+    if (data.blueHealthy) {
+      $("#blueHealthBadge").removeClass("bg-danger").addClass("bg-success").text("Healthy");
+    } else {
+      $("#blueHealthBadge").removeClass("bg-success").addClass("bg-danger").text("Unhealthy");
+    }
+
+    // Update current colors
+    if (data.redColor) {
+      $("#redCurrentColor").text("rgb(" + data.redColor.R + ", " + data.redColor.G + ", " + data.redColor.B + ")");
+    }
+    if (data.blueColor) {
+      $("#blueCurrentColor").text("rgb(" + data.blueColor.R + ", " + data.blueColor.G + ", " + data.blueColor.B + ")");
+    }
+  }
+
+  // Request initial status
+  $(function() {
+    setTimeout(function() {
+      if (websocket && websocket.ws && websocket.ws.readyState === WebSocket.OPEN) {
+        websocket.send("getStatus", {});
+      }
+    }, 500);
+  });
+</script>
+{{end}}

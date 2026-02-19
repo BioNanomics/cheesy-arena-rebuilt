@@ -43,13 +43,15 @@ func TestIsRedHubActive(t *testing.T) {
 	assert.Equal(t, true, IsRedHubActive(22, true))              // Pause
 	assert.Equal(t, true, IsRedHubActive(teleopStart-0.1, true)) // End of pause
 
-	// During transition period (first 10 seconds of teleop), both hubs are active
-	assert.Equal(t, true, IsRedHubActive(teleopStart, true))        // Start of transition
-	assert.Equal(t, true, IsRedHubActive(teleopStart+5, true))      // Middle of transition
-	assert.Equal(t, true, IsRedHubActive(transitionEnd-0.1, true))  // End of transition
-	assert.Equal(t, true, IsRedHubActive(teleopStart, false))       // Start of transition
-	assert.Equal(t, true, IsRedHubActive(teleopStart+5, false))     // Middle of transition
-	assert.Equal(t, true, IsRedHubActive(transitionEnd-0.1, false)) // End of transition
+	// During transition period (first 10 seconds of teleop), only the alliance that will be INACTIVE during shift 0 has their hub active
+	// Red won auto: Red will be INACTIVE in shift 0, so Red hub is ACTIVE during transition
+	assert.Equal(t, true, IsRedHubActive(teleopStart, true))       // Start of transition
+	assert.Equal(t, true, IsRedHubActive(teleopStart+5, true))     // Middle of transition
+	assert.Equal(t, true, IsRedHubActive(transitionEnd-0.1, true)) // End of transition
+	// Blue won auto or tie: Red will be ACTIVE in shift 0, so Red hub is INACTIVE during transition
+	assert.Equal(t, false, IsRedHubActive(teleopStart, false))       // Start of transition
+	assert.Equal(t, false, IsRedHubActive(teleopStart+5, false))     // Middle of transition
+	assert.Equal(t, false, IsRedHubActive(transitionEnd-0.1, false)) // End of transition
 
 	// Red won auto: Red is INACTIVE first (shift 0), then alternates every 25 seconds
 	// Shift 0 = 10-35 sec into teleop, Shift 1 = 35-60 sec, etc.
@@ -88,13 +90,15 @@ func TestIsBlueHubActive(t *testing.T) {
 	assert.Equal(t, true, IsBlueHubActive(22, true))              // Pause
 	assert.Equal(t, true, IsBlueHubActive(teleopStart-0.1, true)) // End of pause
 
-	// During transition period (first 10 seconds of teleop), both hubs are active
-	assert.Equal(t, true, IsBlueHubActive(teleopStart, true))        // Start of transition
-	assert.Equal(t, true, IsBlueHubActive(teleopStart+5, true))      // Middle of transition
-	assert.Equal(t, true, IsBlueHubActive(transitionEnd-0.1, true))  // End of transition
-	assert.Equal(t, true, IsBlueHubActive(teleopStart, false))       // Start of transition
-	assert.Equal(t, true, IsBlueHubActive(teleopStart+5, false))     // Middle of transition
-	assert.Equal(t, true, IsBlueHubActive(transitionEnd-0.1, false)) // End of transition
+	// During transition period (first 10 seconds of teleop), only the alliance that will be INACTIVE during shift 0 has their hub active
+	// Blue won auto: Blue will be INACTIVE in shift 0, so Blue hub is ACTIVE during transition
+	assert.Equal(t, true, IsBlueHubActive(teleopStart, true))       // Start of transition
+	assert.Equal(t, true, IsBlueHubActive(teleopStart+5, true))     // Middle of transition
+	assert.Equal(t, true, IsBlueHubActive(transitionEnd-0.1, true)) // End of transition
+	// Red won auto or tie: Blue will be ACTIVE in shift 0, so Blue hub is INACTIVE during transition
+	assert.Equal(t, false, IsBlueHubActive(teleopStart, false))       // Start of transition
+	assert.Equal(t, false, IsBlueHubActive(teleopStart+5, false))     // Middle of transition
+	assert.Equal(t, false, IsBlueHubActive(transitionEnd-0.1, false)) // End of transition
 
 	// Blue won auto: Blue is INACTIVE first (shift 0), then alternates every 25 seconds
 	assert.Equal(t, false, IsBlueHubActive(transitionEnd, true))    // Start of shift 0 - INACTIVE
@@ -124,12 +128,12 @@ func TestIsRedHubActiveForScoring(t *testing.T) {
 	transitionEnd := teleopStart + float64(TransitionDurationSec)
 	teleopEnd := teleopStart + float64(MatchTiming.TeleopDurationSec)
 
-	// Red won auto: Red is INACTIVE first (shift 0), then alternates
-	// Transition period (both hubs active)
+	// Red won auto: Red is ACTIVE during transition, then INACTIVE during shift 0, then alternates
+	// Transition period (Red hub ACTIVE because Red will be INACTIVE in shift 0)
 	assert.Equal(t, true, IsRedHubActiveForScoring(teleopStart, true))
 	assert.Equal(t, true, IsRedHubActiveForScoring(teleopStart+9, true))
 
-	// Grace period after transition ends (both hubs were active during transition)
+	// Grace period after transition ends because Red hub was ACTIVE during transition
 	assert.Equal(t, true, IsRedHubActiveForScoring(transitionEnd, true))      // 0 sec after transition (grace period)
 	assert.Equal(t, true, IsRedHubActiveForScoring(transitionEnd+2.9, true))  // 2.9 sec after transition (grace period)
 	assert.Equal(t, false, IsRedHubActiveForScoring(transitionEnd+3.1, true)) // 3.1 sec after transition (shift 0, Red INACTIVE)
@@ -161,12 +165,12 @@ func TestIsBlueHubActiveForScoring(t *testing.T) {
 	transitionEnd := teleopStart + float64(TransitionDurationSec)
 	teleopEnd := teleopStart + float64(MatchTiming.TeleopDurationSec)
 
-	// Blue won auto: Blue is INACTIVE first (shift 0), then alternates
-	// Transition period (both hubs active)
+	// Blue won auto: Blue is ACTIVE during transition, then INACTIVE during shift 0, then alternates
+	// Transition period (Blue hub ACTIVE because Blue will be INACTIVE in shift 0)
 	assert.Equal(t, true, IsBlueHubActiveForScoring(teleopStart, true))
 	assert.Equal(t, true, IsBlueHubActiveForScoring(teleopStart+9, true))
 
-	// Grace period after transition ends (both hubs were active during transition)
+	// Grace period after transition ends because Blue hub was ACTIVE during transition
 	assert.Equal(t, true, IsBlueHubActiveForScoring(transitionEnd, true))      // 0 sec after transition (grace period)
 	assert.Equal(t, true, IsBlueHubActiveForScoring(transitionEnd+2.9, true))  // 2.9 sec after transition (grace period)
 	assert.Equal(t, false, IsBlueHubActiveForScoring(transitionEnd+3.1, true)) // 3.1 sec after transition (shift 0, Blue INACTIVE)
