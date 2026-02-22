@@ -15,8 +15,8 @@ import (
 
 func TestNewGoveeController(t *testing.T) {
 	client := partner.NewGoveeClient()
-	controller := NewGoveeController("test-device", client)
-	
+	controller := NewGoveeController("test-device", client, false)
+
 	assert.NotNil(t, controller)
 	assert.Equal(t, "test-device", controller.deviceId)
 	assert.NotNil(t, controller.goveeClient)
@@ -25,8 +25,8 @@ func TestNewGoveeController(t *testing.T) {
 
 func TestGoveeController_SetAddress(t *testing.T) {
 	client := partner.NewGoveeClient()
-	controller := NewGoveeController("device1", client)
-	
+	controller := NewGoveeController("device1", client, false)
+
 	err := controller.SetAddress("device2")
 	assert.NoError(t, err)
 	assert.Equal(t, "device2", controller.deviceId)
@@ -34,16 +34,16 @@ func TestGoveeController_SetAddress(t *testing.T) {
 
 func TestGoveeController_SetGetColor(t *testing.T) {
 	client := partner.NewGoveeClient()
-	controller := NewGoveeController("test-device", client)
-	
+	controller := NewGoveeController("test-device", client, false)
+
 	// Test setting red
 	controller.SetColor(ColorRed)
 	assert.Equal(t, ColorRed, controller.GetColor())
-	
+
 	// Test setting blue
 	controller.SetColor(ColorBlue)
 	assert.Equal(t, ColorBlue, controller.GetColor())
-	
+
 	// Test setting off
 	controller.SetColor(ColorOff)
 	assert.Equal(t, ColorOff, controller.GetColor())
@@ -51,75 +51,75 @@ func TestGoveeController_SetGetColor(t *testing.T) {
 
 func TestGoveeController_Update_NoDeviceId(t *testing.T) {
 	client := partner.NewGoveeClient()
-	controller := NewGoveeController("", client)
-	
+	controller := NewGoveeController("", client, false)
+
 	controller.SetColor(ColorRed)
 	controller.Update() // Should not panic with empty device ID
-	
+
 	assert.True(t, controller.IsHealthy())
 }
 
 func TestGoveeController_Update_ClientNotEnabled(t *testing.T) {
 	client := partner.NewGoveeClient()
-	controller := NewGoveeController("test-device", client)
-	
+	controller := NewGoveeController("test-device", client, false)
+
 	controller.SetColor(ColorRed)
 	controller.Update() // Should not panic when client not enabled
-	
+
 	// Health should still be true since we haven't tried to communicate
 	assert.True(t, controller.IsHealthy())
 }
 
 func TestGoveeController_IsHealthy_Timeout(t *testing.T) {
 	client := partner.NewGoveeClient()
-	controller := NewGoveeController("test-device", client)
-	
+	controller := NewGoveeController("test-device", client, false)
+
 	// Set last success to long ago
 	controller.lastSuccess = time.Now().Add(-10 * time.Second)
-	
+
 	assert.False(t, controller.IsHealthy())
 }
 
 func TestGoveeController_Close(t *testing.T) {
 	client := partner.NewGoveeClient()
-	controller := NewGoveeController("test-device", client)
-	
+	controller := NewGoveeController("test-device", client, false)
+
 	controller.SetColor(ColorRed)
 	controller.Close()
-	
+
 	// After close, color should be off
 	assert.Equal(t, ColorOff, controller.GetColor())
 }
 
 func TestGoveeController_UpdateThrottling(t *testing.T) {
 	client := partner.NewGoveeClient()
-	controller := NewGoveeController("test-device", client)
-	
+	controller := NewGoveeController("test-device", client, false)
+
 	controller.SetColor(ColorRed)
 	controller.lastUpdate = time.Now()
 	controller.lastColor = ColorRed
-	
+
 	// Update should be throttled
 	controller.Update()
-	
+
 	// Last update time should not have changed significantly
 	assert.WithinDuration(t, time.Now(), controller.lastUpdate, 50*time.Millisecond)
 }
 
 func TestGoveeController_ColorTransitions(t *testing.T) {
 	client := partner.NewGoveeClient()
-	controller := NewGoveeController("test-device", client)
-	
+	controller := NewGoveeController("test-device", client, false)
+
 	// Test off -> red transition
 	controller.SetColor(ColorOff)
 	controller.lastColor = ColorOff
 	controller.SetColor(ColorRed)
 	assert.Equal(t, ColorRed, controller.GetColor())
-	
+
 	// Test red -> blue transition
 	controller.SetColor(ColorBlue)
 	assert.Equal(t, ColorBlue, controller.GetColor())
-	
+
 	// Test blue -> off transition
 	controller.SetColor(ColorOff)
 	assert.Equal(t, ColorOff, controller.GetColor())
@@ -127,8 +127,8 @@ func TestGoveeController_ColorTransitions(t *testing.T) {
 
 func TestGoveeController_InterfaceCompliance(t *testing.T) {
 	client := partner.NewGoveeClient()
-	var controller LedController = NewGoveeController("test-device", client)
-	
+	var controller LedController = NewGoveeController("test-device", client, false)
+
 	// Verify interface methods are available
 	assert.NotNil(t, controller)
 	controller.SetColor(ColorGreen)
@@ -137,4 +137,3 @@ func TestGoveeController_InterfaceCompliance(t *testing.T) {
 	assert.NotNil(t, controller.IsHealthy)
 	controller.Close()
 }
-

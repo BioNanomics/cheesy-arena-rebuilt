@@ -45,11 +45,18 @@ type LedController interface {
 	// SetAddress configures the controller's target address (IP for DMX, device ID for Govee)
 	SetAddress(address string) error
 
-	// SetColor sets the desired color for the LED
+	// SetColor sets the desired color for the LED (solid color mode)
 	SetColor(color Color)
 
 	// GetColor returns the current color setting
 	GetColor() Color
+
+	// SetPixels sets individual pixel colors (pixel-level control mode)
+	// Only supported by controllers that return true for SupportsPixelControl()
+	SetPixels(pixels []Color)
+
+	// SupportsPixelControl returns whether this controller supports per-pixel color control
+	SupportsPixelControl() bool
 
 	// Update sends the current color to the physical device
 	Update()
@@ -61,6 +68,11 @@ type LedController interface {
 	IsHealthy() bool
 }
 
+const (
+	// Number of pixels per LED strip for pixel-level control
+	NumPixelsPerStrip = 50
+)
+
 // DmxController implements the LedController interface for DMX/sACN E1.31 over Ethernet.
 // This was previously named "Controller" and provides backward compatibility.
 type DmxController struct {
@@ -69,8 +81,11 @@ type DmxController struct {
 	conn         net.Conn
 	color        Color
 	lastColor    Color
+	pixels       []Color // Pixel array for pixel-level control
+	lastPixels   []Color // Last sent pixel array
+	usePixelMode bool    // True if using pixel-level control, false for solid color
 	lastSend     time.Time
-	StartChannel int // Starting channel for the hub (7 channels)
+	StartChannel int // Starting channel for the hub
 	packet       []byte
 }
 
@@ -93,10 +108,20 @@ func (dmx *DmxController) SetAddress(address string) error {
 
 func (dmx *DmxController) SetColor(color Color) {
 	dmx.color = color
+	dmx.usePixelMode = false // Switch to solid color mode
 }
 
 func (dmx *DmxController) GetColor() Color {
 	return dmx.color
+}
+
+func (dmx *DmxController) SetPixels(pixels []Color) {
+	dmx.pixels = pixels
+	dmx.usePixelMode = true // Switch to pixel mode
+}
+
+func (dmx *DmxController) SupportsPixelControl() bool {
+	return true // DMX supports per-pixel control
 }
 
 func (dmx *DmxController) Close() {
@@ -112,33 +137,70 @@ func (dmx *DmxController) IsHealthy() bool {
 }
 
 func (dmx *DmxController) Update() {
-	color := dmx.color
-
 	if dmx.conn == nil {
 		// This controller is not configured; do nothing.
 		return
 	}
 
-	// Create the template packet if it doesn't already exist.
-	if len(dmx.packet) == 0 {
-		dmx.packet = createBlankPacket(3)
-	}
+	if dmx.usePixelMode {
+		// Pixel-level control mode
+		pixels := dmx.pixels
 
-	// Send packets if the pixel values have changed.
-	if dmx.shouldSendPacket(color) {
-		dmx.populatePacket(color, dmx.StartChannel)
-		if err := dmx.sendPacket(dmx.Universe); err != nil {
-			log.Printf("sACN error writing data to universe %d: %v", dmx.Universe, err)
-			return
+		// Create the template packet if it doesn't already exist or if size changed
+		numChannels := len(pixels) * 3
+		if len(dmx.packet) == 0 || len(dmx.packet) != pixelDataOffset+numChannels+3 {
+			dmx.packet = createBlankPacket(numChannels)
+			dmx.lastPixels = make([]Color, len(pixels))
 		}
-		dmx.lastColor = color
-		dmx.lastSend = time.Now()
+
+		// Send packets if the pixel values have changed
+		if dmx.shouldSendPixelPacket(pixels) {
+			dmx.populatePixelPacket(pixels, dmx.StartChannel)
+			if err := dmx.sendPacket(dmx.Universe); err != nil {
+				log.Printf("sACN error writing data to universe %d: %v", dmx.Universe, err)
+				return
+			}
+			copy(dmx.lastPixels, pixels)
+			dmx.lastSend = time.Now()
+		}
+	} else {
+		// Solid color mode
+		color := dmx.color
+
+		// Create the template packet if it doesn't already exist
+		if len(dmx.packet) == 0 {
+			dmx.packet = createBlankPacket(3)
+		}
+
+		// Send packets if the pixel values have changed
+		if dmx.shouldSendPacket(color) {
+			dmx.populatePacket(color, dmx.StartChannel)
+			if err := dmx.sendPacket(dmx.Universe); err != nil {
+				log.Printf("sACN error writing data to universe %d: %v", dmx.Universe, err)
+				return
+			}
+			dmx.lastColor = color
+			dmx.lastSend = time.Now()
+		}
 	}
 }
 
 func (dmx *DmxController) shouldSendPacket(color Color) bool {
 	if !color.Equals(dmx.lastColor) {
 		return true
+	}
+	return time.Since(dmx.lastSend) >= heartbeatInterval
+}
+
+func (dmx *DmxController) shouldSendPixelPacket(pixels []Color) bool {
+	// Check if pixel array changed
+	if len(pixels) != len(dmx.lastPixels) {
+		return true
+	}
+	for i := range pixels {
+		if !pixels[i].Equals(dmx.lastPixels[i]) {
+			return true
+		}
 	}
 	return time.Since(dmx.lastSend) >= heartbeatInterval
 }
@@ -156,6 +218,21 @@ func (dmx *DmxController) populatePacket(color Color, startChannel int) {
 	dmx.packet[pixelDataOffset+startChannel-1+0] = color.R
 	dmx.packet[pixelDataOffset+startChannel-1+1] = color.G
 	dmx.packet[pixelDataOffset+startChannel-1+2] = color.B
+}
+
+func (dmx *DmxController) populatePixelPacket(pixels []Color, startChannel int) {
+	// Clear DMX data area
+	for i := pixelDataOffset; i < len(dmx.packet); i++ {
+		dmx.packet[i] = 0
+	}
+
+	// Populate each pixel (3 channels per pixel: R, G, B)
+	for pixelIndex, color := range pixels {
+		channelOffset := pixelDataOffset + startChannel - 1 + (pixelIndex * 3)
+		dmx.packet[channelOffset+0] = color.R
+		dmx.packet[channelOffset+1] = color.G
+		dmx.packet[channelOffset+2] = color.B
+	}
 }
 
 func (dmx *DmxController) sendPacket(universe int) error {

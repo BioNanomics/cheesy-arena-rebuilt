@@ -72,6 +72,7 @@ type EventSettings struct {
 	BlueLedAddress                   string // DMX: IP address, Govee: Device MAC
 	RedLedDeviceId                   string // Govee: Device MAC (deprecated, use RedLedAddress)
 	BlueLedDeviceId                  string // Govee: Device MAC (deprecated, use BlueLedAddress)
+	GoveeLoggingEnabled              bool   // Enable verbose logging for Govee LED controllers
 	AdminPassword                    string
 	TeamSignRed1Id                   int
 	TeamSignRed2Id                   int

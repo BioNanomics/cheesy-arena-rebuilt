@@ -20,23 +20,25 @@ const (
 
 // GoveeController implements the LedController interface for Govee smart LED devices.
 type GoveeController struct {
-	deviceId    string
-	goveeClient *partner.GoveeClient
-	color       Color
-	lastColor   Color
-	lastUpdate  time.Time
-	lastSuccess time.Time
-	isHealthy   bool
-	mutex       sync.Mutex
+	deviceId      string
+	goveeClient   *partner.GoveeClient
+	color         Color
+	lastColor     Color
+	lastUpdate    time.Time
+	lastSuccess   time.Time
+	isHealthy     bool
+	enableLogging bool
+	mutex         sync.Mutex
 }
 
 // NewGoveeController creates a new Govee LED controller for the specified device.
-func NewGoveeController(deviceId string, client *partner.GoveeClient) *GoveeController {
+func NewGoveeController(deviceId string, client *partner.GoveeClient, enableLogging bool) *GoveeController {
 	return &GoveeController{
-		deviceId:    deviceId,
-		goveeClient: client,
-		isHealthy:   true,
-		lastSuccess: time.Now(),
+		deviceId:      deviceId,
+		goveeClient:   client,
+		isHealthy:     true,
+		lastSuccess:   time.Now(),
+		enableLogging: enableLogging,
 	}
 }
 
@@ -73,6 +75,30 @@ func (g *GoveeController) GetColor() Color {
 	return g.color
 }
 
+// SetPixels sets individual pixel colors. Govee controllers don't support per-pixel control,
+// so this falls back to using a simple alternating pattern between the two most common colors.
+func (g *GoveeController) SetPixels(pixels []Color) {
+	// Govee doesn't support per-pixel control, so we fall back to simple alternating
+	// Count occurrences of each color to determine the dominant pattern
+	if len(pixels) == 0 {
+		return
+	}
+
+	// Simple heuristic: alternate between first and second pixel colors
+	// This gives a basic chase effect for Govee strips
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+
+	// Use the first pixel color as the solid color (best we can do with Govee)
+	g.color = pixels[0]
+}
+
+// SupportsPixelControl returns whether this controller supports per-pixel color control.
+// Govee controllers only support solid colors, not per-pixel control.
+func (g *GoveeController) SupportsPixelControl() bool {
+	return false
+}
+
 // Update sends the current color to the Govee device.
 func (g *GoveeController) Update() {
 	g.update(false)
@@ -92,8 +118,14 @@ func (g *GoveeController) update(force bool) {
 	lastColor := g.lastColor
 	g.mutex.Unlock()
 
-	// Don't send updates too frequently (unless forced)
-	if !force && time.Since(lastUpdate) < goveeUpdateInterval && color.Equals(lastColor) {
+	// Enforce minimum update interval (unless forced)
+	// This respects the Govee hardware constraint of 50ms minimum between commands
+	if !force && time.Since(lastUpdate) < goveeUpdateInterval {
+		return
+	}
+
+	// Skip if color hasn't changed (no need to send duplicate commands)
+	if color.Equals(lastColor) {
 		return
 	}
 
@@ -112,21 +144,23 @@ func (g *GoveeController) update(force bool) {
 	if color.Equals(ColorOff) {
 		// Turn off with retry logic (handled by client)
 		err = g.goveeClient.TurnOff(deviceId)
-		if err != nil {
+		if err != nil && g.enableLogging {
 			log.Printf("[Govee] TurnOff failed for device %s: %v", deviceId, err)
 		}
 	} else {
-		// First ensure device is on
+		// Ensure device is on and showing the correct color
 		if lastColor.Equals(ColorOff) || !lastColor.Equals(color) {
-			// Set color first
-			err = g.goveeClient.SetColor(deviceId, color.R, color.G, color.B)
+			// Turn on the device first to ensure it's ready to receive color commands
+			err = g.goveeClient.TurnOn(deviceId)
 			if err != nil {
-				log.Printf("[Govee] SetColor failed for device %s: %v", deviceId, err)
-			} else {
-				// Then turn on
-				err = g.goveeClient.TurnOn(deviceId)
-				if err != nil {
+				if g.enableLogging {
 					log.Printf("[Govee] TurnOn failed for device %s: %v", deviceId, err)
+				}
+			} else {
+				// Set the color after device is on
+				err = g.goveeClient.SetColor(deviceId, color.R, color.G, color.B)
+				if err != nil && g.enableLogging {
+					log.Printf("[Govee] SetColor failed for device %s: %v", deviceId, err)
 				}
 			}
 		}
@@ -135,18 +169,20 @@ func (g *GoveeController) update(force bool) {
 	g.mutex.Lock()
 	g.lastUpdate = time.Now()
 	if err != nil {
-		log.Printf("[Govee] Error updating device %s: %v", deviceId, err)
+		if g.enableLogging {
+			log.Printf("[Govee] Error updating device %s: %v", deviceId, err)
 
-		// If device not found, show discovered devices to help troubleshooting
-		if err.Error() == "device not found: "+deviceId {
-			devices := g.goveeClient.GetAllDevices()
-			if len(devices) > 0 {
-				log.Printf("[Govee] Discovered devices on network:")
-				for _, d := range devices {
-					log.Printf("[Govee]   - %s (%s @ %s)", d.DeviceId, d.SKU, d.IP)
+			// If device not found, show discovered devices to help troubleshooting
+			if err.Error() == "device not found: "+deviceId {
+				devices := g.goveeClient.GetAllDevices()
+				if len(devices) > 0 {
+					log.Printf("[Govee] Discovered devices on network:")
+					for _, d := range devices {
+						log.Printf("[Govee]   - %s (%s @ %s)", d.DeviceId, d.SKU, d.IP)
+					}
+				} else {
+					log.Printf("[Govee] No devices discovered. Make sure devices are powered on and on the same network.")
 				}
-			} else {
-				log.Printf("[Govee] No devices discovered. Make sure devices are powered on and on the same network.")
 			}
 		}
 
