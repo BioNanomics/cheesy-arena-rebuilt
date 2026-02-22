@@ -892,7 +892,9 @@ func (arena *Arena) Run() {
 	log.Printf("[Arena] Starting Run() - GoveeClient: %v, LedControllerType: %q", arena.GoveeClient != nil, arena.EventSettings.LedControllerType)
 	if arena.GoveeClient != nil && arena.EventSettings.LedControllerType == "govee" {
 		log.Println("[Arena] About to call StartDiscovery()...")
-		if err := arena.GoveeClient.StartDiscovery(); err != nil {
+		err := arena.GoveeClient.StartDiscovery()
+		log.Printf("[Arena] StartDiscovery() returned, err = %v", err)
+		if err != nil {
 			log.Printf("[Arena] StartDiscovery() returned error: %v", err)
 		} else {
 			log.Println("[Arena] StartDiscovery() succeeded")
