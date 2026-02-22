@@ -44,6 +44,7 @@ type GoveeClient struct {
 	mutex          sync.RWMutex
 	isRunning      bool
 	discoveryReady bool // Set to true after initial discovery completes
+	enableLogging  bool // Controls whether diagnostic messages are logged
 }
 
 // goveeMessage represents the JSON message format for Govee LAN protocol.
@@ -61,6 +62,24 @@ func NewGoveeClient() *GoveeClient {
 	return &GoveeClient{
 		devices:  make(map[string]*GoveeDevice),
 		stopChan: make(chan bool),
+	}
+}
+
+// SetLogging enables or disables diagnostic logging.
+func (c *GoveeClient) SetLogging(enabled bool) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	c.enableLogging = enabled
+}
+
+// logf logs a message if logging is enabled.
+func (c *GoveeClient) logf(format string, args ...interface{}) {
+	c.mutex.RLock()
+	enabled := c.enableLogging
+	c.mutex.RUnlock()
+
+	if enabled {
+		log.Printf(format, args...)
 	}
 }
 
@@ -88,7 +107,7 @@ func (c *GoveeClient) StartDiscovery() error {
 	}
 
 	c.isRunning = true
-	log.Println("[Govee] Device discovery started")
+	c.logf("[Govee] Device discovery started")
 	return nil
 }
 
@@ -114,7 +133,7 @@ func (c *GoveeClient) StopDiscovery() {
 		c.replySocket = nil
 	}
 
-	log.Println("[Govee] Device discovery stopped")
+	c.logf("[Govee] Device discovery stopped")
 }
 
 // GetDevice retrieves a device by its ID.
@@ -225,6 +244,8 @@ func (c *GoveeClient) startReplyListener() error {
 		return err
 	}
 
+	c.logf("[Govee] Starting reply listener on %s:%d", goveeMulticastAddr, goveeScanReplyPort)
+
 	// Listen on all interfaces by binding to 0.0.0.0:port
 	listenAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("0.0.0.0:%d", goveeScanReplyPort))
 	if err != nil {
@@ -236,9 +257,11 @@ func (c *GoveeClient) startReplyListener() error {
 		return err
 	}
 
+	c.logf("[Govee] UDP socket bound to 0.0.0.0:%d", goveeScanReplyPort)
+
 	// Increase receive buffer to reduce packet loss on Windows
 	if err := conn.SetReadBuffer(1024 * 1024); err != nil {
-		log.Printf("[Govee] Warning: Failed to set read buffer size: %v", err)
+		c.logf("[Govee] Warning: Failed to set read buffer size: %v", err)
 	}
 
 	c.replySocket = conn
@@ -252,6 +275,7 @@ func (c *GoveeClient) startReplyListener() error {
 	// Start listening goroutine
 	go c.listenForReplies()
 
+	c.logf("[Govee] Reply listener started successfully")
 	return nil
 }
 
@@ -263,6 +287,8 @@ func (c *GoveeClient) joinMulticastOnAllInterfaces(conn *net.UDPConn, addr *net.
 		return err
 	}
 
+	c.logf("[Govee] Enumerating network interfaces for multicast...")
+
 	// Wrap the UDP connection with ipv4.PacketConn for multicast control
 	p := ipv4.NewPacketConn(conn)
 
@@ -270,26 +296,38 @@ func (c *GoveeClient) joinMulticastOnAllInterfaces(conn *net.UDPConn, addr *net.
 	var lastErr error
 
 	for _, iface := range interfaces {
+		// Log all interfaces for debugging
+		c.logf("[Govee] Found interface: %s (Flags: %v, HW: %s)", iface.Name, iface.Flags, iface.HardwareAddr)
+
 		// Skip interfaces that are down, loopback, or don't support multicast
 		if iface.Flags&net.FlagUp == 0 {
+			c.logf("[Govee]   Skipping %s: interface is down", iface.Name)
 			continue
 		}
 		if iface.Flags&net.FlagLoopback != 0 {
+			c.logf("[Govee]   Skipping %s: loopback interface", iface.Name)
 			continue
 		}
 		if iface.Flags&net.FlagMulticast == 0 {
+			c.logf("[Govee]   Skipping %s: no multicast support", iface.Name)
 			continue
+		}
+
+		// Get interface addresses for additional debugging
+		addrs, _ := iface.Addrs()
+		for _, a := range addrs {
+			c.logf("[Govee]   Interface %s has address: %s", iface.Name, a.String())
 		}
 
 		// Try to join the multicast group on this interface
 		err := p.JoinGroup(&iface, &net.UDPAddr{IP: addr.IP})
 		if err != nil {
-			log.Printf("[Govee] Warning: Failed to join multicast group on interface %s: %v", iface.Name, err)
+			c.logf("[Govee] ERROR: Failed to join multicast group on interface %s: %v", iface.Name, err)
 			lastErr = err
 			continue
 		}
 
-		log.Printf("[Govee] Joined multicast group on interface %s (%s)", iface.Name, iface.HardwareAddr)
+		c.logf("[Govee] SUCCESS: Joined multicast group %s on interface %s (%s)", addr.IP, iface.Name, iface.HardwareAddr)
 		joinedCount++
 	}
 
@@ -300,49 +338,63 @@ func (c *GoveeClient) joinMulticastOnAllInterfaces(conn *net.UDPConn, addr *net.
 		return fmt.Errorf("no suitable network interfaces found for multicast")
 	}
 
-	log.Printf("[Govee] Successfully joined multicast group on %d interface(s)", joinedCount)
+	c.logf("[Govee] Successfully joined multicast group on %d interface(s)", joinedCount)
 	return nil
 }
 
 // listenForReplies processes incoming device discovery replies.
 func (c *GoveeClient) listenForReplies() {
 	buffer := make([]byte, 1024)
+	c.logf("[Govee] Reply listener goroutine started, waiting for packets...")
 
+	packetCount := 0
 	for {
 		select {
 		case <-c.stopChan:
+			c.logf("[Govee] Reply listener stopping (received %d packets total)", packetCount)
 			return
 		default:
 			c.replySocket.SetReadDeadline(time.Now().Add(1 * time.Second))
-			n, _, err := c.replySocket.ReadFromUDP(buffer)
+			n, remoteAddr, err := c.replySocket.ReadFromUDP(buffer)
 			if err != nil {
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					continue
 				}
-				log.Printf("[Govee] Error reading reply: %v", err)
+				c.logf("[Govee] Error reading reply: %v", err)
 				continue
 			}
+
+			packetCount++
+			c.logf("[Govee] Received packet #%d (%d bytes) from %s", packetCount, n, remoteAddr)
 
 			var msg goveeMessage
 			if err := json.Unmarshal(buffer[:n], &msg); err != nil {
+				c.logf("[Govee] Failed to parse JSON from packet: %v", err)
 				continue
 			}
 
+			c.logf("[Govee] Parsed message: cmd=%s", msg.Msg.Cmd)
+
 			if msg.Msg.Cmd != "scan" {
+				c.logf("[Govee] Ignoring non-scan message: %s", msg.Msg.Cmd)
 				continue
 			}
 
 			deviceId, ok := msg.Msg.Data["device"].(string)
 			if !ok {
+				c.logf("[Govee] Scan reply missing device ID")
 				continue
 			}
 
 			ip, ok := msg.Msg.Data["ip"].(string)
 			if !ok {
+				c.logf("[Govee] Scan reply missing IP address")
 				continue
 			}
 
 			sku, _ := msg.Msg.Data["sku"].(string)
+
+			c.logf("[Govee] Discovered device: %s (%s @ %s)", deviceId, sku, ip)
 
 			c.mutex.Lock()
 			c.devices[deviceId] = &GoveeDevice{
@@ -373,15 +425,15 @@ func (c *GoveeClient) startScanBroadcaster() error {
 	// Set multicast TTL and loop for better compatibility
 	p := ipv4.NewPacketConn(conn)
 	if err := p.SetMulticastTTL(2); err != nil {
-		log.Printf("[Govee] Warning: Failed to set multicast TTL: %v", err)
+		c.logf("[Govee] Warning: Failed to set multicast TTL: %v", err)
 	}
 	if err := p.SetMulticastLoopback(true); err != nil {
-		log.Printf("[Govee] Warning: Failed to set multicast loopback: %v", err)
+		c.logf("[Govee] Warning: Failed to set multicast loopback: %v", err)
 	}
 
 	c.scanSocket = conn
 
-	log.Printf("[Govee] Scan broadcaster started, will send to %s", addr)
+	c.logf("[Govee] Scan broadcaster started, will send to %s", addr)
 
 	// Start broadcasting goroutine
 	go c.broadcastScans()
@@ -420,15 +472,19 @@ func (c *GoveeClient) sendScanRequest() {
 
 	jsonData, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("[Govee] Failed to marshal scan request: %v", err)
+		c.logf("[Govee] Failed to marshal scan request: %v", err)
 		return
 	}
 
 	if c.scanSocket != nil {
-		_, err = c.scanSocket.Write(jsonData)
+		n, err := c.scanSocket.Write(jsonData)
 		if err != nil {
-			log.Printf("[Govee] Failed to send scan request: %v", err)
+			c.logf("[Govee] ERROR: Failed to send scan request: %v", err)
+		} else {
+			c.logf("[Govee] Sent scan request (%d bytes) to %s", n, c.scanSocket.RemoteAddr())
 		}
+	} else {
+		c.logf("[Govee] ERROR: Scan socket is nil, cannot send scan request")
 	}
 }
 

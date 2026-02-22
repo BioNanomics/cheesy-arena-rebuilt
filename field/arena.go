@@ -339,6 +339,9 @@ func (arena *Arena) InitializeLedControllers() error {
 			blueDeviceId = settings.BlueLedDeviceId // Fallback to deprecated field
 		}
 
+		// Configure logging for Govee client
+		arena.GoveeClient.SetLogging(settings.GoveeLoggingEnabled)
+
 		arena.RedHubLeds = led.NewGoveeController(redDeviceId, arena.GoveeClient, settings.GoveeLoggingEnabled)
 		arena.BlueHubLeds = led.NewGoveeController(blueDeviceId, arena.GoveeClient, settings.GoveeLoggingEnabled)
 
