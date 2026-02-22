@@ -144,26 +144,16 @@ func (g *GoveeController) update(force bool) {
 	if color.Equals(ColorOff) {
 		// Turn off with retry logic (handled by client)
 		err = g.goveeClient.TurnOff(deviceId)
-		if err != nil && g.enableLogging {
-			log.Printf("[Govee] TurnOff failed for device %s: %v", deviceId, err)
+	} else if lastColor.Equals(ColorOff) {
+		// Device was off, need to turn it on first then set color
+		err = g.goveeClient.TurnOn(deviceId)
+		if err == nil {
+			// Set the color after device is on
+			err = g.goveeClient.SetColor(deviceId, color.R, color.G, color.B)
 		}
 	} else {
-		// Ensure device is on and showing the correct color
-		if lastColor.Equals(ColorOff) || !lastColor.Equals(color) {
-			// Turn on the device first to ensure it's ready to receive color commands
-			err = g.goveeClient.TurnOn(deviceId)
-			if err != nil {
-				if g.enableLogging {
-					log.Printf("[Govee] TurnOn failed for device %s: %v", deviceId, err)
-				}
-			} else {
-				// Set the color after device is on
-				err = g.goveeClient.SetColor(deviceId, color.R, color.G, color.B)
-				if err != nil && g.enableLogging {
-					log.Printf("[Govee] SetColor failed for device %s: %v", deviceId, err)
-				}
-			}
-		}
+		// Device is already on, just change the color
+		err = g.goveeClient.SetColor(deviceId, color.R, color.G, color.B)
 	}
 
 	g.mutex.Lock()
