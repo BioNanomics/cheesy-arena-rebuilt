@@ -361,6 +361,19 @@ UI for configuring event settings.
               </div>
             </fieldset>
             <fieldset class="mb-4">
+              <legend>LED Configuration</legend>
+              <p>
+                LED controller configuration is managed on the <a href="/setup/leds">LED Configuration</a> page.
+                Enable Govee logging below to see detailed diagnostic messages for Govee LED device discovery and communication.
+              </p>
+              <div class="row mb-3">
+                <label class="col-lg-8 control-label" for="goveeLoggingEnabled">Enable Govee Logging</label>
+                <div class="col-lg-1 checkbox">
+                  <input type="checkbox" id="goveeLoggingEnabled" name="goveeLoggingEnabled" {{if .GoveeLoggingEnabled}} checked{{end}}>
+                </div>
+              </div>
+            </fieldset>
+            <fieldset class="mb-4">
               <legend>Team Signs</legend>
               <p>
                 If you are using a set of the (2024+) official team number / timer signs, enter their two-digit IDs

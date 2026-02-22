@@ -213,34 +213,50 @@ func (web *Web) ledsTestHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Send the test color directly to the Govee client, bypassing the controller
-		log.Printf("[LED Test] Sending test commands directly to Govee client for device %s", deviceId)
+		if web.arena.EventSettings.GoveeLoggingEnabled {
+			log.Printf("[LED Test] Sending test commands directly to Govee client for device %s", deviceId)
+		}
 		for i := 0; i < 5; i++ {
 			if color.Equals(led.ColorOff) {
 				err := web.arena.GoveeClient.TurnOff(deviceId)
 				if err != nil {
-					log.Printf("[LED Test] TurnOff failed: %v", err)
+					if web.arena.EventSettings.GoveeLoggingEnabled {
+						log.Printf("[LED Test] TurnOff failed: %v", err)
+					}
 				} else {
-					log.Printf("[LED Test] TurnOff sent successfully")
+					if web.arena.EventSettings.GoveeLoggingEnabled {
+						log.Printf("[LED Test] TurnOff sent successfully")
+					}
 				}
 			} else {
 				// Set color first
 				err := web.arena.GoveeClient.SetColor(deviceId, color.R, color.G, color.B)
 				if err != nil {
-					log.Printf("[LED Test] SetColor failed: %v", err)
+					if web.arena.EventSettings.GoveeLoggingEnabled {
+						log.Printf("[LED Test] SetColor failed: %v", err)
+					}
 				} else {
-					log.Printf("[LED Test] SetColor sent successfully")
+					if web.arena.EventSettings.GoveeLoggingEnabled {
+						log.Printf("[LED Test] SetColor sent successfully")
+					}
 					// Then turn on
 					err = web.arena.GoveeClient.TurnOn(deviceId)
 					if err != nil {
-						log.Printf("[LED Test] TurnOn failed: %v", err)
+						if web.arena.EventSettings.GoveeLoggingEnabled {
+							log.Printf("[LED Test] TurnOn failed: %v", err)
+						}
 					} else {
-						log.Printf("[LED Test] TurnOn sent successfully")
+						if web.arena.EventSettings.GoveeLoggingEnabled {
+							log.Printf("[LED Test] TurnOn sent successfully")
+						}
 					}
 				}
 			}
 			time.Sleep(200 * time.Millisecond)
 		}
-		log.Printf("[LED Test] Sent 5 test commands directly to Govee client")
+		if web.arena.EventSettings.GoveeLoggingEnabled {
+			log.Printf("[LED Test] Sent 5 test commands directly to Govee client")
+		}
 
 		// Keep the test color displayed for 2 seconds before allowing arena loop to resume
 		time.Sleep(2 * time.Second)
