@@ -7,50 +7,36 @@ package game
 
 func TestScore1() *Score {
 	fouls := []Foul{
-		{true, 25, 16},
-		{false, 1868, 13},
-		{false, 1868, 13},
-		{true, 25, 15},
-		{true, 25, 15},
-		{true, 25, 15},
-		{true, 25, 15},
+		{1, true, 25, 16},
+		{2, false, 1868, 13},
+		{3, false, 1868, 13},
+		{4, true, 25, 15},
+		{5, true, 25, 15},
+		{6, true, 25, 15},
+		{7, true, 25, 15},
 	}
 	return &Score{
-		RobotsBypassed: [3]bool{false, false, true},
-		LeaveStatuses:  [3]bool{true, true, false},
-		Reef: Reef{
-			AutoBranches:   [3][12]bool{{true}},
-			Branches:       [3][12]bool{{true, true}, {true, true, true}},
-			AutoTroughNear: 0,
-			AutoTroughFar:  1,
-			TroughNear:     3,
-			TroughFar:      4,
-		},
-		BargeAlgae:      7,
-		ProcessorAlgae:  2,
-		EndgameStatuses: [3]EndgameStatus{EndgameParked, EndgameNone, EndgameDeepCage},
-		Fouls:           fouls,
-		PlayoffDq:       false,
+		RobotsBypassed:      [3]bool{false, false, true},
+		AutoFuel:            3,
+		ActiveFuel:          50,
+		InactiveFuel:        25,
+		AutoClimbStatuses:   [3]EndgameStatus{EndgameLevel1, EndgameNone, EndgameNone},
+		TeleopClimbStatuses: [3]EndgameStatus{EndgameLevel1, EndgameNone, EndgameLevel3},
+		Fouls:               fouls,
+		PlayoffDq:           false,
 	}
 }
 
 func TestScore2() *Score {
 	return &Score{
-		RobotsBypassed: [3]bool{false, false, false},
-		LeaveStatuses:  [3]bool{false, true, false},
-		Reef: Reef{
-			AutoBranches:   [3][12]bool{{}, {}, {true, true, true, true}},
-			Branches:       [3][12]bool{{true, true, true}, {true, true, true, true, true}, {true, true, true}},
-			AutoTroughNear: 2,
-			AutoTroughFar:  1,
-			TroughNear:     10,
-			TroughFar:      5,
-		},
-		BargeAlgae:      9,
-		ProcessorAlgae:  1,
-		EndgameStatuses: [3]EndgameStatus{EndgameDeepCage, EndgameShallowCage, EndgameShallowCage},
-		Fouls:           []Foul{},
-		PlayoffDq:       false,
+		RobotsBypassed:      [3]bool{false, false, false},
+		AutoFuel:            5,
+		ActiveFuel:          120,
+		InactiveFuel:        80,
+		AutoClimbStatuses:   [3]EndgameStatus{EndgameNone, EndgameLevel1, EndgameNone},
+		TeleopClimbStatuses: [3]EndgameStatus{EndgameLevel3, EndgameLevel2, EndgameLevel1},
+		Fouls:               []Foul{},
+		PlayoffDq:           false,
 	}
 }
 

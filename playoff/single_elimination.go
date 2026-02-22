@@ -7,8 +7,9 @@ package playoff
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/model"
 	"strings"
+
+	"github.com/Team254/cheesy-arena/model"
 )
 
 // Creates a single-elimination bracket containing only the required matchups for the given number of alliances, and
@@ -224,7 +225,7 @@ func newSingleEliminationMatch(longRoundName, shortRoundName string, setNumber, 
 		order:               order,
 		durationSec:         600,
 		useTiebreakCriteria: true,
-		tbaMatchKey:         model.TbaMatchKey{strings.ToLower(shortRoundName), setNumber, matchNumber},
+		tbaMatchKey:         model.TbaMatchKey{CompLevel: strings.ToLower(shortRoundName), SetNumber: setNumber, MatchNumber: matchNumber},
 	}
 }
 
@@ -237,7 +238,7 @@ func newFinalMatches(startingOrder int) []*matchSpec {
 			order:               startingOrder,
 			durationSec:         300,
 			useTiebreakCriteria: false,
-			tbaMatchKey:         model.TbaMatchKey{"f", 1, 1},
+			tbaMatchKey:         model.TbaMatchKey{CompLevel: "f", SetNumber: 1, MatchNumber: 1},
 		},
 		{
 			longName:            "Final 2",
@@ -245,7 +246,7 @@ func newFinalMatches(startingOrder int) []*matchSpec {
 			order:               startingOrder + 1,
 			durationSec:         300,
 			useTiebreakCriteria: false,
-			tbaMatchKey:         model.TbaMatchKey{"f", 1, 2},
+			tbaMatchKey:         model.TbaMatchKey{CompLevel: "f", SetNumber: 1, MatchNumber: 2},
 		},
 		{
 			longName:            "Final 3",
@@ -253,7 +254,7 @@ func newFinalMatches(startingOrder int) []*matchSpec {
 			order:               startingOrder + 2,
 			durationSec:         300,
 			useTiebreakCriteria: false,
-			tbaMatchKey:         model.TbaMatchKey{"f", 1, 3},
+			tbaMatchKey:         model.TbaMatchKey{CompLevel: "f", SetNumber: 1, MatchNumber: 3},
 		},
 		{
 			longName:            "Overtime 1",
@@ -262,7 +263,7 @@ func newFinalMatches(startingOrder int) []*matchSpec {
 			durationSec:         600,
 			useTiebreakCriteria: true,
 			isHidden:            true,
-			tbaMatchKey:         model.TbaMatchKey{"f", 1, 4},
+			tbaMatchKey:         model.TbaMatchKey{CompLevel: "f", SetNumber: 1, MatchNumber: 4},
 		},
 		{
 			longName:            "Overtime 2",
@@ -271,7 +272,7 @@ func newFinalMatches(startingOrder int) []*matchSpec {
 			durationSec:         600,
 			useTiebreakCriteria: true,
 			isHidden:            true,
-			tbaMatchKey:         model.TbaMatchKey{"f", 1, 5},
+			tbaMatchKey:         model.TbaMatchKey{CompLevel: "f", SetNumber: 1, MatchNumber: 5},
 		},
 		{
 			longName:            "Overtime 3",
@@ -280,7 +281,7 @@ func newFinalMatches(startingOrder int) []*matchSpec {
 			durationSec:         600,
 			useTiebreakCriteria: true,
 			isHidden:            true,
-			tbaMatchKey:         model.TbaMatchKey{"f", 1, 6},
+			tbaMatchKey:         model.TbaMatchKey{CompLevel: "f", SetNumber: 1, MatchNumber: 6},
 		},
 	}
 }

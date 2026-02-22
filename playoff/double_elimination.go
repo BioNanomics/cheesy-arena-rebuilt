@@ -7,6 +7,7 @@ package playoff
 
 import (
 	"fmt"
+
 	"github.com/Team254/cheesy-arena/model"
 )
 
@@ -150,7 +151,7 @@ func newDoubleEliminationMatch(number int, nameDetail string, durationSec int) [
 			order:               number,
 			durationSec:         durationSec,
 			useTiebreakCriteria: true,
-			tbaMatchKey:         model.TbaMatchKey{"sf", number, 1},
+			tbaMatchKey:         model.TbaMatchKey{CompLevel: "sf", SetNumber: number, MatchNumber: 1},
 		},
 	}
 }

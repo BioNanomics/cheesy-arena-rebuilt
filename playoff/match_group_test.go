@@ -4,9 +4,10 @@
 package playoff
 
 import (
+	"testing"
+
 	"github.com/Team254/cheesy-arena/model"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestCollectMatchGroupsErrors(t *testing.T) {
@@ -37,19 +38,19 @@ func TestCollectMatchSpecsErrors(t *testing.T) {
 		longName:    "Final 1",
 		shortName:   "F1",
 		order:       1,
-		tbaMatchKey: model.TbaMatchKey{"f", 1, 1},
+		tbaMatchKey: model.TbaMatchKey{CompLevel: "f", SetNumber: 1, MatchNumber: 1},
 	}
 	match2 := matchSpec{
 		longName:    "Final 2",
 		shortName:   "F2",
 		order:       2,
-		tbaMatchKey: model.TbaMatchKey{"f", 1, 2},
+		tbaMatchKey: model.TbaMatchKey{CompLevel: "f", SetNumber: 1, MatchNumber: 2},
 	}
 	match3 := matchSpec{
 		longName:    "Final 3",
 		shortName:   "F3",
 		order:       3,
-		tbaMatchKey: model.TbaMatchKey{"f", 1, 3},
+		tbaMatchKey: model.TbaMatchKey{CompLevel: "f", SetNumber: 1, MatchNumber: 3},
 	}
 
 	// No errors to start.
@@ -89,7 +90,7 @@ func TestCollectMatchSpecsErrors(t *testing.T) {
 
 	// Duplicate TBA match key.
 	match3.order = 3
-	match3.tbaMatchKey = model.TbaMatchKey{"f", 1, 1}
+	match3.tbaMatchKey = model.TbaMatchKey{CompLevel: "f", SetNumber: 1, MatchNumber: 1}
 	_, err = collectMatchSpecs(&matchGroup1)
 	if assert.NotNil(t, err) {
 		assert.Regexp(t, "TBA key .* defined more than once", err.Error())

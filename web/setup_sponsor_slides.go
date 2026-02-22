@@ -6,9 +6,10 @@
 package web
 
 import (
-	"github.com/Team254/cheesy-arena/model"
 	"net/http"
 	"strconv"
+
+	"github.com/Team254/cheesy-arena/model"
 )
 
 // Shows the sponsor slides configuration page.
@@ -129,9 +130,6 @@ func (web *Web) reorderSponsorSlide(id int, moveUp bool) error {
 		return nil
 	}
 	adjacentSponsorSlide := &sponsorSlides[sponsorSlideIndex]
-	if err != nil {
-		return err
-	}
 
 	// Swap their display orders and save.
 	sponsorSlide.DisplayOrder, adjacentSponsorSlide.DisplayOrder =

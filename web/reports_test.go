@@ -4,12 +4,13 @@
 package web
 
 import (
+	"testing"
+	"time"
+
 	"github.com/Team254/cheesy-arena/game"
 	"github.com/Team254/cheesy-arena/model"
 	"github.com/Team254/cheesy-arena/tournament"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestRankingsCsvReport(t *testing.T) {
@@ -23,7 +24,7 @@ func TestRankingsCsvReport(t *testing.T) {
 	recorder := web.getHttpResponse("/reports/csv/rankings")
 	assert.Equal(t, 200, recorder.Code)
 	assert.Equal(t, "text/plain", recorder.Header()["Content-Type"][0])
-	expectedBody := "Rank,TeamId,RankingPoints,CoopertitionPoints,MatchPoints,AutoPoints,BargePoints,Wins,Losses," +
+	expectedBody := "Rank,TeamId,RankingPoints,MatchPoints,AutoPoints,EndgamePoints,ActiveBalls,Wins,Losses," +
 		"Ties,Disqualifications,Played\n1,254,20,625,90,554,12,3,2,1,0,10\n2,1114,18,700,625,90,23,1,3,2,0,10\n\n"
 	assert.Equal(t, expectedBody, recorder.Body.String())
 }

@@ -5,14 +5,15 @@ package web
 
 import (
 	"encoding/json"
+	"testing"
+	"time"
+
 	"github.com/Team254/cheesy-arena/game"
 	"github.com/Team254/cheesy-arena/model"
 	"github.com/Team254/cheesy-arena/tournament"
 	"github.com/Team254/cheesy-arena/websocket"
 	gorillawebsocket "github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestMatchesApi(t *testing.T) {
@@ -118,8 +119,8 @@ func TestRankingsApi(t *testing.T) {
 func TestSponsorSlidesApi(t *testing.T) {
 	web := setupTestWeb(t)
 
-	slide1 := model.SponsorSlide{0, "subtitle", "line1", "line2", "image", 2, 1}
-	slide2 := model.SponsorSlide{0, "Chezy Sponsaur", "Teh", "Chezy Pofs", "ejface.jpg", 54, 2}
+	slide1 := model.SponsorSlide{Id: 0, Subtitle: "subtitle", Line1: "line1", Line2: "line2", Image: "image", DisplayTimeSec: 2, DisplayOrder: 1}
+	slide2 := model.SponsorSlide{Id: 0, Subtitle: "Chezy Sponsaur", Line1: "Teh", Line2: "Chezy Pofs", Image: "ejface.jpg", DisplayTimeSec: 54, DisplayOrder: 2}
 	assert.Nil(t, web.arena.Database.CreateSponsorSlide(&slide1))
 	assert.Nil(t, web.arena.Database.CreateSponsorSlide(&slide2))
 

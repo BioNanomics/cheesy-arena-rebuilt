@@ -7,12 +7,13 @@ package web
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/Team254/cheesy-arena/websocket"
-	"github.com/mitchellh/mapstructure"
 	"io"
 	"log"
 	"net/http"
+
+	"github.com/Team254/cheesy-arena/model"
+	"github.com/Team254/cheesy-arena/websocket"
+	"github.com/mitchellh/mapstructure"
 )
 
 // Shows the lower third configuration page.
@@ -205,9 +206,6 @@ func (web *Web) reorderLowerThird(id int, moveUp bool) error {
 		return fmt.Errorf("Already at the limit.")
 	}
 	adjacentLowerThird := &lowerThirds[lowerThirdIndex]
-	if err != nil {
-		return err
-	}
 
 	// Swap their display orders and save.
 	lowerThird.DisplayOrder, adjacentLowerThird.DisplayOrder =

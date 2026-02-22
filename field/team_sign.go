@@ -7,14 +7,15 @@ package field
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/game"
-	"github.com/Team254/cheesy-arena/model"
 	"image/color"
 	"log"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Team254/cheesy-arena/game"
+	"github.com/Team254/cheesy-arena/model"
 )
 
 // Represents a collection of team number and timer signs.
@@ -122,13 +123,13 @@ func (signs *TeamSigns) Update(arena *Arena) {
 }
 
 // Sets the team numbers for the next match on all signs.
-func (signs *TeamSigns) SetNextMatchTeams(match *model.Match) {
-	signs.Red1.nextMatchTeamId = match.Red1
-	signs.Red2.nextMatchTeamId = match.Red2
-	signs.Red3.nextMatchTeamId = match.Red3
-	signs.Blue1.nextMatchTeamId = match.Blue1
-	signs.Blue2.nextMatchTeamId = match.Blue2
-	signs.Blue3.nextMatchTeamId = match.Blue3
+func (signs *TeamSigns) SetNextMatchTeams(teams [6]int) {
+	signs.Red1.nextMatchTeamId = teams[0]
+	signs.Red2.nextMatchTeamId = teams[1]
+	signs.Red3.nextMatchTeamId = teams[2]
+	signs.Blue1.nextMatchTeamId = teams[3]
+	signs.Blue2.nextMatchTeamId = teams[4]
+	signs.Blue3.nextMatchTeamId = teams[5]
 }
 
 // Sets the IP address of the sign.
@@ -144,7 +145,7 @@ func (sign *TeamSign) SetId(id int) {
 	ipAddress := fmt.Sprintf("%s%d", teamSignAddressPrefix, id)
 
 	var err error
-	sign.udpConn, err = net.Dial("udp4", fmt.Sprintf("%s:%d", ipAddress, teamSignPort))
+	sign.udpConn, err = net.Dial("udp4", net.JoinHostPort(ipAddress, fmt.Sprintf("%d", teamSignPort)))
 	if err != nil {
 		log.Printf("Failed to connect to team sign at %s: %v", ipAddress, err)
 		return
@@ -198,34 +199,34 @@ func generateInMatchTeamRearText(arena *Arena, isRed bool, countdown string) str
 		formatString = "B%03d-R%03d"
 	}
 	scoreSummary := realtimeScore.CurrentScore.Summarize(&opponentRealtimeScore.CurrentScore)
-	scoreTotal := scoreSummary.Score - scoreSummary.BargePoints
+	scoreTotal := scoreSummary.Score
 	opponentScoreSummary := opponentRealtimeScore.CurrentScore.Summarize(&realtimeScore.CurrentScore)
-	opponentScoreTotal := opponentScoreSummary.Score - opponentScoreSummary.BargePoints
+	opponentScoreTotal := opponentScoreSummary.Score
 	allianceScores := fmt.Sprintf(formatString, scoreTotal, opponentScoreTotal)
 
-	var coralRankingPointProgress string
+	// TODO: Add REBUILT-specific ranking point progress display
+	var rankingPointProgress string
 	if arena.CurrentMatch.Type != model.Playoff {
-		coralRankingPointProgress = fmt.Sprintf("%d/%d", scoreSummary.NumCoralLevels, scoreSummary.NumCoralLevelsGoal)
+		rankingPointProgress = fmt.Sprintf("%d", scoreSummary.TotalFuel)
 	}
 
-	return fmt.Sprintf("%s %s %s", countdown, allianceScores, coralRankingPointProgress)
+	return fmt.Sprintf("%s %s %s", countdown, allianceScores, rankingPointProgress)
 }
 
 // Returns the in-match rear text for the timer display for the given alliance.
 func generateInMatchTimerRearText(arena *Arena, isRed bool) string {
-	var reef *game.Reef
+	// TODO: Add REBUILT-specific rear text display (e.g., ball counts, shift info)
+	var score *game.Score
 	if isRed {
-		reef = &arena.RedRealtimeScore.CurrentScore.Reef
+		score = &arena.RedRealtimeScore.CurrentScore
 	} else {
-		reef = &arena.BlueRealtimeScore.CurrentScore.Reef
+		score = &arena.BlueRealtimeScore.CurrentScore
 	}
 
 	return fmt.Sprintf(
-		"1-%02d 2-%02d 3-%02d 4-%02d",
-		reef.CountTotalCoralByLevel(game.Level1),
-		reef.CountTotalCoralByLevel(game.Level2),
-		reef.CountTotalCoralByLevel(game.Level3),
-		reef.CountTotalCoralByLevel(game.Level4),
+		"A:%02d T:%03d",
+		score.ActiveFuel,
+		score.ActiveFuel+score.InactiveFuel,
 	)
 }
 

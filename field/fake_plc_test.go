@@ -10,7 +10,7 @@ import (
 )
 
 type FakePlc struct {
-	isEnabled             bool
+	address               string
 	fieldEStop            bool
 	redEStops             [3]bool
 	blueEStops            [3]bool
@@ -22,17 +22,19 @@ type FakePlc struct {
 	stackLightBuzzer      bool
 	fieldResetLight       bool
 	cycleState            bool
-	redProcessorCount     int
-	blueProcessorCount    int
-	redTrussLights        [3]bool
-	blueTrussLights       [3]bool
+	redHubCount           int
+	blueHubCount          int
+	redHubLight           bool
+	blueHubLight          bool
+	hubMotors             bool
 }
 
 func (plc *FakePlc) SetAddress(address string) {
+	plc.address = address
 }
 
 func (plc *FakePlc) IsEnabled() bool {
-	return plc.isEnabled
+	return plc.address != ""
 }
 
 func (plc *FakePlc) IsHealthy() bool {
@@ -100,11 +102,15 @@ func (plc *FakePlc) GetCoilNames() []string {
 	return []string{}
 }
 
-func (plc *FakePlc) GetProcessorCounts() (int, int) {
-	return plc.redProcessorCount, plc.blueProcessorCount
+func (plc *FakePlc) GetHubBallCounts() (int, int) {
+	return plc.redHubCount, plc.blueHubCount
 }
 
-func (plc *FakePlc) SetTrussLights(redLights, blueLights [3]bool) {
-	plc.redTrussLights = redLights
-	plc.blueTrussLights = blueLights
+func (plc *FakePlc) SetHubLights(redLight, blueLight bool) {
+	plc.redHubLight = redLight
+	plc.blueHubLight = blueLight
+}
+
+func (plc *FakePlc) SetHubMotors(state bool) {
+	plc.hubMotors = state
 }

@@ -5,13 +5,14 @@ package tournament
 
 import (
 	"fmt"
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Team254/cheesy-arena/model"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
@@ -20,7 +21,7 @@ func TestMain(m *testing.M) {
 
 func TestNonExistentSchedule(t *testing.T) {
 	teams := make([]model.Team, 5)
-	scheduleBlocks := []model.ScheduleBlock{{0, model.Test, time.Unix(0, 0).UTC(), 2, 60}}
+	scheduleBlocks := []model.ScheduleBlock{{Id: 0, MatchType: model.Test, StartTime: time.Unix(0, 0).UTC(), NumMatches: 2, MatchSpacingSec: 60}}
 	_, err := BuildRandomSchedule(teams, scheduleBlocks, model.Test)
 	expectedErr := "No schedule template exists for 5 teams and 2 matches"
 	if assert.NotNil(t, err) {
@@ -35,7 +36,7 @@ func TestMalformedSchedule(t *testing.T) {
 	scheduleFile.WriteString("1,0,2,0,3,0,4,0,5,0,6,0\n6,0,5,0,4,0,3,0,2,0,1,0\n")
 	scheduleFile.Close()
 	teams := make([]model.Team, 5)
-	scheduleBlocks := []model.ScheduleBlock{{0, model.Test, time.Unix(0, 0).UTC(), 1, 60}}
+	scheduleBlocks := []model.ScheduleBlock{{Id: 0, MatchType: model.Test, StartTime: time.Unix(0, 0).UTC(), NumMatches: 1, MatchSpacingSec: 60}}
 	_, err := BuildRandomSchedule(teams, scheduleBlocks, model.Test)
 	expectedErr := "Schedule file contains 2 matches, expected 1"
 	if assert.NotNil(t, err) {
@@ -60,7 +61,7 @@ func TestScheduleTeams(t *testing.T) {
 	for i := 0; i < numTeams; i++ {
 		teams[i].Id = i + 101
 	}
-	scheduleBlocks := []model.ScheduleBlock{{0, model.Practice, time.Unix(0, 0).UTC(), 6, 60}}
+	scheduleBlocks := []model.ScheduleBlock{{Id: 0, MatchType: model.Practice, StartTime: time.Unix(0, 0).UTC(), NumMatches: 6, MatchSpacingSec: 60}}
 	matches, err := BuildRandomSchedule(teams, scheduleBlocks, model.Practice)
 	assert.Nil(t, err)
 	assertMatch(t, matches[0], model.Practice, 1, 0, "P1", "Practice 1", "p", 115, 111, 108, 109, 116, 117)
@@ -71,13 +72,13 @@ func TestScheduleTeams(t *testing.T) {
 	assertMatch(t, matches[5], model.Practice, 6, 300, "P6", "Practice 6", "p", 118, 105, 106, 107, 104, 116)
 
 	// Check with excess room for matches in the schedule.
-	scheduleBlocks = []model.ScheduleBlock{{0, model.Practice, time.Unix(0, 0).UTC(), 7, 60}}
+	scheduleBlocks = []model.ScheduleBlock{{Id: 0, MatchType: model.Practice, StartTime: time.Unix(0, 0).UTC(), NumMatches: 7, MatchSpacingSec: 60}}
 	matches, err = BuildRandomSchedule(teams, scheduleBlocks, model.Practice)
 	assert.Nil(t, err)
 
 	// Check with qualification matches.
 	rand.Seed(0)
-	scheduleBlocks = []model.ScheduleBlock{{0, model.Qualification, time.Unix(0, 0).UTC(), 6, 60}}
+	scheduleBlocks = []model.ScheduleBlock{{Id: 0, MatchType: model.Qualification, StartTime: time.Unix(0, 0).UTC(), NumMatches: 6, MatchSpacingSec: 60}}
 	matches, err = BuildRandomSchedule(teams, scheduleBlocks, model.Qualification)
 	assert.Nil(t, err)
 	assertMatch(t, matches[0], model.Qualification, 1, 0, "Q1", "Qualification 1", "qm", 115, 111, 108, 109, 116, 117)
@@ -91,9 +92,9 @@ func TestScheduleTeams(t *testing.T) {
 func TestScheduleTiming(t *testing.T) {
 	teams := make([]model.Team, 18)
 	scheduleBlocks := []model.ScheduleBlock{
-		{0, model.Qualification, time.Unix(100, 0).UTC(), 10, 75},
-		{0, model.Qualification, time.Unix(20000, 0).UTC(), 5, 1000},
-		{0, model.Qualification, time.Unix(100000, 0).UTC(), 15, 29},
+		{Id: 0, MatchType: model.Qualification, StartTime: time.Unix(100, 0).UTC(), NumMatches: 10, MatchSpacingSec: 75},
+		{Id: 0, MatchType: model.Qualification, StartTime: time.Unix(20000, 0).UTC(), NumMatches: 5, MatchSpacingSec: 1000},
+		{Id: 0, MatchType: model.Qualification, StartTime: time.Unix(100000, 0).UTC(), NumMatches: 15, MatchSpacingSec: 29},
 	}
 	matches, err := BuildRandomSchedule(teams, scheduleBlocks, model.Qualification)
 	assert.Nil(t, err)
@@ -113,7 +114,7 @@ func TestScheduleSurrogates(t *testing.T) {
 	for i := 0; i < numTeams; i++ {
 		teams[i].Id = i + 101
 	}
-	scheduleBlocks := []model.ScheduleBlock{{0, model.Qualification, time.Unix(0, 0).UTC(), 64, 60}}
+	scheduleBlocks := []model.ScheduleBlock{{Id: 0, MatchType: model.Qualification, StartTime: time.Unix(0, 0).UTC(), NumMatches: 64, MatchSpacingSec: 60}}
 	matches, _ := BuildRandomSchedule(teams, scheduleBlocks, model.Qualification)
 	for i, match := range matches {
 		if i == 13 || i == 14 {

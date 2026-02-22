@@ -130,30 +130,230 @@ const handleMatchLoad = function (data) {
   $("#timeoutBreakDescription").text(data.BreakDescription);
 };
 
+// Store current match time data and score data for hub indicator updates
+let currentMatchTimeData = null;
+let currentScoreData = null;
+
 // Handles a websocket message to update the match time countdown.
 const handleMatchTime = function (data) {
+  currentMatchTimeData = data;
   translateMatchTime(data, function (matchState, matchStateText, countdownSec) {
     $("#matchTime").text(getCountdownString(countdownSec));
   });
+
+  // Update hub indicators when time changes (if we have score data)
+  if (currentScoreData) {
+    updateHubIndicators(currentScoreData);
+  }
 };
 
 // Handles a websocket message to update the match score.
 const handleRealtimeScore = function (data) {
-  $(`#${redSide}ScoreNumber`).text(data.Red.ScoreSummary.Score - data.Red.ScoreSummary.BargePoints);
-  $(`#${blueSide}ScoreNumber`).text(data.Blue.ScoreSummary.Score - data.Blue.ScoreSummary.BargePoints);
+  currentScoreData = data; // Store for hub indicator updates
 
-  let redCoral, blueCoral;
-  if (currentMatch.Type === matchTypePlayoff) {
-    redCoral = data.Red.ScoreSummary.NumCoral;
-    blueCoral = data.Blue.ScoreSummary.NumCoral;
-  } else {
-    redCoral = `${data.Red.ScoreSummary.NumCoralLevels}/${data.Red.ScoreSummary.NumCoralLevelsGoal}`;
-    blueCoral = `${data.Blue.ScoreSummary.NumCoralLevels}/${data.Blue.ScoreSummary.NumCoralLevelsGoal}`;
+  $(`#${redSide}ScoreNumber`).text(data.Red.ScoreSummary.Score);
+  $(`#${blueSide}ScoreNumber`).text(data.Blue.ScoreSummary.Score);
+
+  // Update FUEL counts (just the number, white color)
+  $(`#${redSide}Fuel`).text(data.Red.ScoreSummary.TotalFuel);
+  $(`#${blueSide}Fuel`).text(data.Blue.ScoreSummary.TotalFuel);
+
+  // Update hub activation indicators
+  updateHubIndicators(data);
+};
+
+// Updates the hub activation indicators based on current match state and time
+const updateHubIndicators = function(scoreData) {
+  if (!currentMatchTimeData) {
+    return;
   }
-  $(`#${redSide}Coral`).text(redCoral);
-  $(`#${redSide}Algae`).text(data.Red.ScoreSummary.NumAlgae);
-  $(`#${blueSide}Coral`).text(blueCoral);
-  $(`#${blueSide}Algae`).text(data.Blue.ScoreSummary.NumAlgae);
+
+  const matchTimeSec = currentMatchTimeData.MatchTimeSec;
+  const matchState = currentMatchTimeData.MatchState;
+
+  const redAutoPoints = scoreData.Red.ScoreSummary.AutoPoints;
+  const blueAutoPoints = scoreData.Blue.ScoreSummary.AutoPoints;
+  let redWonAuto = redAutoPoints > blueAutoPoints;
+  let blueWonAuto = blueAutoPoints > redAutoPoints;
+
+  // Handle tie case - use random tie-breaker from backend
+  if (!redWonAuto && !blueWonAuto) {
+    if (scoreData.AutoTieWinner === "red") {
+      redWonAuto = true;
+    } else {
+      blueWonAuto = true;
+    }
+  }
+
+  let redHubActive = isRedHubActive(matchTimeSec, matchState, redWonAuto);
+  let blueHubActive = isBlueHubActive(matchTimeSec, matchState, blueWonAuto);
+  const shouldFlash = shouldHubFlash(matchTimeSec, matchState);
+
+  // Apply OFF/ON flash pattern during last 4 seconds
+  if (shouldFlash) {
+    const teleopStartSec = 23;
+    const transitionDurationSec = 10;
+    const transitionEndSec = teleopStartSec + transitionDurationSec;
+    const teleopEndSec = 163;
+    const shiftDurationSec = 25;
+
+    // Calculate time remaining in current period
+    let timeRemaining;
+    if (matchTimeSec >= transitionEndSec && matchTimeSec < teleopEndSec - 30) {
+      // During alternating shifts
+      const postTransitionSec = matchTimeSec - transitionEndSec;
+      const timeInShift = postTransitionSec % shiftDurationSec;
+      timeRemaining = shiftDurationSec - timeInShift;
+    } else {
+      // During end of match
+      timeRemaining = teleopEndSec - matchTimeSec;
+    }
+
+    const secondInPattern = Math.floor(timeRemaining);
+    // OFF when second is 3 or 1 (odd), ON when second is 2 or 0 (even)
+    const flashOff = (secondInPattern % 2 === 1);
+
+    if (flashOff) {
+      redHubActive = false;
+      blueHubActive = false;
+    }
+  }
+
+  const redIndicator = $(`#${redSide}HubIndicator`);
+  if (redHubActive) {
+    redIndicator.addClass("active");
+  } else {
+    redIndicator.removeClass("active");
+  }
+
+  const blueIndicator = $(`#${blueSide}HubIndicator`);
+  if (blueHubActive) {
+    blueIndicator.addClass("active");
+  } else {
+    blueIndicator.removeClass("active");
+  }
+};
+
+const isRedHubActive = function(matchTimeSec, matchState, redWonAuto) {
+  const teleopStartSec = 23; // warmup(0) + auto(20) + pause(3)
+  const transitionDurationSec = 10; // First 10 seconds of teleop when both hubs are active
+  const teleopEndSec = 163; // teleopStartSec + teleop(140)
+  const endGameDurationSec = 30;
+
+  // During auto and pause, both hubs are active
+  // matchState: 3 = AUTO_PERIOD, 4 = PAUSE_PERIOD (see match_timing.js)
+  if (matchState === 3 || matchState === 4) {
+    return true;
+  }
+
+  // During transition period (first 10 seconds of teleop), only show indicator for alliance that won auto
+  // Note: Both hubs are active for SCORING, but LED/indicator only shows for the winner
+  if (matchState === 5 && matchTimeSec >= teleopStartSec && matchTimeSec < teleopStartSec + transitionDurationSec) {
+    return redWonAuto;
+  }
+
+  if (matchTimeSec >= teleopEndSec - endGameDurationSec && matchTimeSec < teleopEndSec) {
+    return true;
+  }
+
+  // After the match ends, hubs are not active
+  if (matchTimeSec >= teleopEndSec) {
+    return false;
+  }
+
+  if (matchTimeSec < teleopStartSec) {
+    return false;
+  }
+
+  // Calculate which alternating shift we're in (after transition period)
+  const postTransitionSec = matchTimeSec - (teleopStartSec + transitionDurationSec);
+  if (postTransitionSec < 0) {
+    return false;
+  }
+  const shift = Math.floor(postTransitionSec / 25);
+
+  if (redWonAuto) {
+    // Red won auto, so Red is INACTIVE first, then alternates
+    return shift % 2 === 1;
+  } else {
+    // Blue won auto, so Red is ACTIVE first, then alternates
+    return shift % 2 === 0;
+  }
+};
+
+const isBlueHubActive = function(matchTimeSec, matchState, blueWonAuto) {
+  const teleopStartSec = 23; // warmup(0) + auto(20) + pause(3)
+  const transitionDurationSec = 10; // First 10 seconds of teleop when both hubs are active
+  const teleopEndSec = 163; // teleopStartSec + teleop(140)
+  const endGameDurationSec = 30;
+
+  // During auto and pause, both hubs are active
+  // matchState: 3 = AUTO_PERIOD, 4 = PAUSE_PERIOD (see match_timing.js)
+  if (matchState === 3 || matchState === 4) {
+    return true;
+  }
+
+  // During transition period (first 10 seconds of teleop), only show indicator for alliance that won auto
+  // Note: Both hubs are active for SCORING, but LED/indicator only shows for the winner
+  if (matchState === 5 && matchTimeSec >= teleopStartSec && matchTimeSec < teleopStartSec + transitionDurationSec) {
+    return blueWonAuto;
+  }
+
+  if (matchTimeSec >= teleopEndSec - endGameDurationSec && matchTimeSec < teleopEndSec) {
+    return true;
+  }
+
+  // After the match ends, hubs are not active
+  if (matchTimeSec >= teleopEndSec) {
+    return false;
+  }
+
+  if (matchTimeSec < teleopStartSec) {
+    return false;
+  }
+
+  // Calculate which alternating shift we're in (after transition period)
+  const postTransitionSec = matchTimeSec - (teleopStartSec + transitionDurationSec);
+  if (postTransitionSec < 0) {
+    return false;
+  }
+  const shift = Math.floor(postTransitionSec / 25);
+
+  if (blueWonAuto) {
+    // Blue won auto, so Blue is INACTIVE first, then alternates
+    return shift % 2 === 1;
+  } else {
+    // Red won auto, so Blue is ACTIVE first, then alternates
+    return shift % 2 === 0;
+  }
+};
+
+const shouldHubFlash = function(matchTimeSec, matchState) {
+  const teleopStartSec = 23; // warmup(0) + auto(20) + pause(3)
+  const transitionDurationSec = 10;
+  const transitionEndSec = teleopStartSec + transitionDurationSec;
+  const teleopEndSec = 163; // teleopStartSec + teleop(140)
+  const shiftDurationSec = 25;
+  const flashThresholdSec = 4;
+
+  if (matchTimeSec >= teleopEndSec - flashThresholdSec && matchTimeSec < teleopEndSec) {
+    return true;
+  }
+
+  // Flash during last 4 seconds of transition period
+  if (matchTimeSec >= transitionEndSec - flashThresholdSec && matchTimeSec < transitionEndSec) {
+    return true;
+  }
+
+  // Flash during last 4 seconds of each shift (during teleop, not in END GAME)
+  // matchState: 5 = TELEOP_PERIOD (see match_timing.js)
+  if (matchState === 5 && matchTimeSec >= transitionEndSec && matchTimeSec < teleopEndSec - 30) {
+    const postTransitionSec = matchTimeSec - transitionEndSec;
+    const timeInShift = postTransitionSec % shiftDurationSec;
+    return timeInShift >= shiftDurationSec - flashThresholdSec;
+  }
+
+  return false;
 };
 
 const transitionBlankToIntro = function (callback) {

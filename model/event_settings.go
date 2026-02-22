@@ -66,6 +66,13 @@ type EventSettings struct {
 	SCCUpCommands                    string
 	SCCDownCommands                  string
 	PlcAddress                       string
+	DMXAddress                       string
+	LedControllerType                string // "dmx" or "govee"
+	RedLedAddress                    string // DMX: IP address, Govee: Device MAC
+	BlueLedAddress                   string // DMX: IP address, Govee: Device MAC
+	RedLedDeviceId                   string // Govee: Device MAC (deprecated, use RedLedAddress)
+	BlueLedDeviceId                  string // Govee: Device MAC (deprecated, use BlueLedAddress)
+	GoveeLoggingEnabled              bool   // Enable verbose logging for Govee LED controllers
 	AdminPassword                    string
 	TeamSignRed1Id                   int
 	TeamSignRed2Id                   int
@@ -111,11 +118,9 @@ type EventSettings struct {
 	PauseDurationSec                 int
 	TeleopDurationSec                int
 	WarningRemainingDurationSec      int
-	AutoBonusCoralThreshold          int
-	CoralBonusPerLevelThreshold      int
-	CoralBonusCoopEnabled            bool
-	BargeBonusPointThreshold         int
-	IncludeAlgaeInBargeBonus         bool
+	EnergizedRPThreshold             int
+	SuperchargedRPThreshold          int
+	TraversalRPThreshold             int
 }
 
 func (database *Database) GetEventSettings() (*EventSettings, error) {
@@ -145,11 +150,15 @@ func (database *Database) GetEventSettings() (*EventSettings, error) {
 		PauseDurationSec:            game.MatchTiming.PauseDurationSec,
 		TeleopDurationSec:           game.MatchTiming.TeleopDurationSec,
 		WarningRemainingDurationSec: game.MatchTiming.WarningRemainingDurationSec,
-		AutoBonusCoralThreshold:     game.AutoBonusCoralThreshold,
-		CoralBonusPerLevelThreshold: game.CoralBonusPerLevelThreshold,
-		CoralBonusCoopEnabled:       game.CoralBonusCoopEnabled,
-		BargeBonusPointThreshold:    game.BargeBonusPointThreshold,
-		IncludeAlgaeInBargeBonus:    game.IncludeAlgaeInBargeBonus,
+		EnergizedRPThreshold:        game.EnergizedRPThreshold,
+		SuperchargedRPThreshold:     game.SuperchargedRPThreshold,
+		TraversalRPThreshold:        game.TraversalRPThreshold,
+		DMXAddress:                  "10.0.100.80",
+		LedControllerType:           "dmx", // Default to DMX for backward compatibility
+		RedLedAddress:               "",
+		BlueLedAddress:              "",
+		RedLedDeviceId:              "",
+		BlueLedDeviceId:             "",
 	}
 
 	if err := database.eventSettingsTable.create(&eventSettings); err != nil {

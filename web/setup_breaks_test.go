@@ -4,20 +4,21 @@
 package web
 
 import (
-	"github.com/Team254/cheesy-arena/model"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/Team254/cheesy-arena/model"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSetupBreaks(t *testing.T) {
 	web := setupTestWeb(t)
 
 	web.arena.Database.CreateScheduledBreak(
-		&model.ScheduledBreak{0, model.Playoff, 4, time.Unix(500, 0).UTC(), 900, "Field Break 1"},
+		&model.ScheduledBreak{Id: 0, MatchType: model.Playoff, TypeOrderBefore: 4, Time: time.Unix(500, 0).UTC(), DurationSec: 900, Description: "Field Break 1"},
 	)
 	web.arena.Database.CreateScheduledBreak(
-		&model.ScheduledBreak{0, model.Playoff, 4, time.Unix(500, 0).UTC(), 900, "Field Break 2"},
+		&model.ScheduledBreak{Id: 0, MatchType: model.Playoff, TypeOrderBefore: 4, Time: time.Unix(500, 0).UTC(), DurationSec: 900, Description: "Field Break 2"},
 	)
 
 	recorder := web.getHttpResponse("/setup/breaks")

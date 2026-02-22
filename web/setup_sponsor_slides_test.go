@@ -4,18 +4,19 @@
 package web
 
 import (
+	"testing"
+
 	"github.com/Team254/cheesy-arena/model"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestSetupSponsorSlides(t *testing.T) {
 	web := setupTestWeb(t)
 
 	web.arena.Database.CreateSponsorSlide(
-		&model.SponsorSlide{0, "Subtitle", "Sponsor Line 1", "Sponsor Line 2", "", 10, 0},
+		&model.SponsorSlide{Id: 0, Subtitle: "Subtitle", Line1: "Sponsor Line 1", Line2: "Sponsor Line 2", Image: "", DisplayTimeSec: 10, DisplayOrder: 0},
 	)
-	web.arena.Database.CreateSponsorSlide(&model.SponsorSlide{0, "Subtitle", "", "", "Image.gif", 10, 1})
+	web.arena.Database.CreateSponsorSlide(&model.SponsorSlide{Id: 0, Subtitle: "Subtitle", Line1: "", Line2: "", Image: "Image.gif", DisplayTimeSec: 10, DisplayOrder: 1})
 
 	recorder := web.getHttpResponse("/setup/sponsor_slides")
 	assert.Equal(t, 200, recorder.Code)
