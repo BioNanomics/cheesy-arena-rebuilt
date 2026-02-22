@@ -87,16 +87,19 @@ func (c *GoveeClient) logf(format string, args ...interface{}) {
 func (c *GoveeClient) StartDiscovery() error {
 	log.Println("[Govee] StartDiscovery: Acquiring mutex...")
 	c.mutex.Lock()
-	defer c.mutex.Unlock()
 	log.Println("[Govee] StartDiscovery: Mutex acquired")
 
 	if c.isRunning {
+		c.mutex.Unlock()
 		return fmt.Errorf("discovery already running")
 	}
 
 	// Recreate stopChan to make restart-safe (prevents panic on double-close and allows restart)
 	log.Println("[Govee] StartDiscovery: Creating stopChan...")
 	c.stopChan = make(chan bool)
+
+	// Release mutex before calling functions that may use c.logf() (which needs RLock)
+	c.mutex.Unlock()
 
 	// Start listening for scan replies
 	log.Println("[Govee] StartDiscovery: About to call startReplyListener...")
@@ -113,7 +116,11 @@ func (c *GoveeClient) StartDiscovery() error {
 	}
 	log.Println("[Govee] StartDiscovery: startScanBroadcaster completed successfully")
 
+	// Re-acquire mutex to set isRunning
+	c.mutex.Lock()
 	c.isRunning = true
+	c.mutex.Unlock()
+
 	c.logf("[Govee] Device discovery started")
 	log.Println("[Govee] StartDiscovery: Returning success")
 	return nil
