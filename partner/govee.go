@@ -85,29 +85,37 @@ func (c *GoveeClient) logf(format string, args ...interface{}) {
 
 // StartDiscovery begins the device discovery process.
 func (c *GoveeClient) StartDiscovery() error {
+	log.Println("[Govee] StartDiscovery: Acquiring mutex...")
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+	log.Println("[Govee] StartDiscovery: Mutex acquired")
 
 	if c.isRunning {
 		return fmt.Errorf("discovery already running")
 	}
 
 	// Recreate stopChan to make restart-safe (prevents panic on double-close and allows restart)
+	log.Println("[Govee] StartDiscovery: Creating stopChan...")
 	c.stopChan = make(chan bool)
 
 	// Start listening for scan replies
+	log.Println("[Govee] StartDiscovery: About to call startReplyListener...")
 	if err := c.startReplyListener(); err != nil {
 		return fmt.Errorf("failed to start reply listener: %v", err)
 	}
+	log.Println("[Govee] StartDiscovery: startReplyListener completed successfully")
 
 	// Start broadcasting scan requests
+	log.Println("[Govee] StartDiscovery: About to call startScanBroadcaster...")
 	if err := c.startScanBroadcaster(); err != nil {
 		c.replySocket.Close()
 		return fmt.Errorf("failed to start scan broadcaster: %v", err)
 	}
+	log.Println("[Govee] StartDiscovery: startScanBroadcaster completed successfully")
 
 	c.isRunning = true
 	c.logf("[Govee] Device discovery started")
+	log.Println("[Govee] StartDiscovery: Returning success")
 	return nil
 }
 
@@ -239,20 +247,26 @@ func (c *GoveeClient) SendCommand(deviceId, command string, data map[string]inte
 
 // startReplyListener starts listening for device discovery replies.
 func (c *GoveeClient) startReplyListener() error {
+	log.Println("[Govee] startReplyListener: Starting...")
 	addr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", goveeMulticastAddr, goveeScanReplyPort))
 	if err != nil {
 		return err
 	}
+	log.Printf("[Govee] startReplyListener: Resolved multicast addr: %s", addr)
 
 	c.logf("[Govee] Starting reply listener on %s:%d", goveeMulticastAddr, goveeScanReplyPort)
 
 	// Listen on all interfaces by binding to 0.0.0.0:port
+	log.Println("[Govee] startReplyListener: Resolving listen address...")
 	listenAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("0.0.0.0:%d", goveeScanReplyPort))
 	if err != nil {
 		return err
 	}
+	log.Printf("[Govee] startReplyListener: Listen address resolved: %s", listenAddr)
 
+	log.Println("[Govee] startReplyListener: About to call ListenUDP...")
 	conn, err := net.ListenUDP("udp4", listenAddr)
+	log.Printf("[Govee] startReplyListener: ListenUDP returned, err=%v", err)
 	if err != nil {
 		return err
 	}
@@ -260,9 +274,11 @@ func (c *GoveeClient) startReplyListener() error {
 	c.logf("[Govee] UDP socket bound to 0.0.0.0:%d", goveeScanReplyPort)
 
 	// Increase receive buffer to reduce packet loss on Windows
+	log.Println("[Govee] startReplyListener: Setting read buffer...")
 	if err := conn.SetReadBuffer(1024 * 1024); err != nil {
 		c.logf("[Govee] Warning: Failed to set read buffer size: %v", err)
 	}
+	log.Println("[Govee] startReplyListener: Read buffer set")
 
 	c.replySocket = conn
 
