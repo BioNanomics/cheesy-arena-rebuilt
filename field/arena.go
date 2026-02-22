@@ -481,6 +481,14 @@ func (arena *Arena) LoadMatch(match *model.Match) error {
 	arena.Plc.ResetMatch()
 	arena.NextFoulId = 1
 
+	// Randomly choose a tie-breaker for auto (50/50 chance)
+	if time.Now().UnixNano()%2 == 0 {
+		arena.autoTieWinner = "red"
+	} else {
+		arena.autoTieWinner = "blue"
+	}
+	log.Printf("[Hub Debug] Match loaded, autoTieWinner set to: %s", arena.autoTieWinner)
+
 	// Notify any listeners about the new match.
 	arena.MatchLoadNotifier.Notify()
 	arena.RealtimeScoreNotifier.Notify()
@@ -741,12 +749,7 @@ func (arena *Arena) Update() {
 		arena.AllianceStationDisplayModeNotifier.Notify()
 		go arena.BlackmagicClient.StartRecording()
 		go arena.CompanionClient.SendEvent(partner.EventMatchStart)
-		// Randomly choose a tie-breaker for auto (50/50 chance)
-		if time.Now().UnixNano()%2 == 0 {
-			arena.autoTieWinner = "red"
-		} else {
-			arena.autoTieWinner = "blue"
-		}
+		log.Printf("[Hub Debug] Match starting, autoTieWinner is: %s", arena.autoTieWinner)
 		if game.MatchTiming.WarmupDurationSec > 0 {
 			arena.MatchState = WarmupPeriod
 			enabled = false
@@ -1441,6 +1444,12 @@ func (arena *Arena) handleHubLights() {
 		matchTimeSec := arena.MatchTimeSec()
 		redHubActive := game.IsRedHubActive(matchTimeSec, redWonAuto)
 		blueHubActive := game.IsBlueHubActive(matchTimeSec, blueWonAuto)
+
+		// Debug logging
+		redAutoPoints := arena.RedRealtimeScore.CurrentScore.Summarize(&arena.BlueRealtimeScore.CurrentScore).AutoPoints
+		blueAutoPoints := arena.BlueRealtimeScore.CurrentScore.Summarize(&arena.RedRealtimeScore.CurrentScore).AutoPoints
+		log.Printf("[Hub Debug Backend] Time: %.1fs, RedAuto: %d, BlueAuto: %d, TieWinner: %s, RedWon: %v, BlueWon: %v, RedActive: %v, BlueActive: %v",
+			matchTimeSec, redAutoPoints, blueAutoPoints, arena.autoTieWinner, redWonAuto, blueWonAuto, redHubActive, blueHubActive)
 
 		// Check if we're within 4 seconds of a hub deactivation and flash
 		teleopStartSec := float64(game.MatchTiming.WarmupDurationSec + game.MatchTiming.AutoDurationSec + game.MatchTiming.PauseDurationSec)

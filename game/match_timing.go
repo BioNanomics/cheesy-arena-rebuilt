@@ -57,11 +57,11 @@ func GetCurrentShift(matchTimeSec float64) int {
 
 // IsRedHubActive returns true if the red alliance's hub is currently active.
 // During auto and pause, both hubs are active.
-// During the first 10 seconds of teleop (transition period), only the alliance that will be INACTIVE during shift 0 has their hub active.
+// During the first 10 seconds of teleop (transition period), both hubs are active.
 // During the last 30 seconds of teleop (END GAME), both hubs are active.
 // After the transition, the alliance that LOST auto has their hub active first.
-// If Red won auto: Red is ACTIVE during transition (because Red will be INACTIVE in shift 0), then alternates every 25 seconds.
-// If Blue won auto or tie: Red is INACTIVE during transition (because Red will be ACTIVE in shift 0), then alternates every 25 seconds.
+// If Red won auto: Red is INACTIVE in shift 0, then alternates every 25 seconds.
+// If Blue won auto or tie: Red is ACTIVE in shift 0, then alternates every 25 seconds.
 func IsRedHubActive(matchTimeSec float64, redWonAuto bool) bool {
 	teleopStartSec := float64(MatchTiming.WarmupDurationSec + MatchTiming.AutoDurationSec + MatchTiming.PauseDurationSec)
 	teleopEndSec := teleopStartSec + float64(MatchTiming.TeleopDurationSec)
@@ -72,11 +72,9 @@ func IsRedHubActive(matchTimeSec float64, redWonAuto bool) bool {
 		return true
 	}
 
-	// During transition period (first 10 seconds of teleop), only the alliance that will be INACTIVE during shift 0 has their hub active
+	// During transition period (first 10 seconds of teleop), both hubs are active
 	if matchTimeSec < transitionEndSec {
-		// Red won auto means Red will be INACTIVE during shift 0, so Red hub is ACTIVE during transition
-		// Blue won auto or tie means Red will be ACTIVE during shift 0, so Red hub is INACTIVE during transition
-		return redWonAuto
+		return true
 	}
 
 	// During END GAME (last 30 seconds of teleop), both hubs are active
@@ -110,11 +108,11 @@ func IsRedHubActive(matchTimeSec float64, redWonAuto bool) bool {
 
 // IsBlueHubActive returns true if the blue alliance's hub is currently active.
 // During auto and pause, both hubs are active.
-// During the first 10 seconds of teleop (transition period), only the alliance that will be INACTIVE during shift 0 has their hub active.
+// During the first 10 seconds of teleop (transition period), both hubs are active.
 // During the last 30 seconds of teleop (END GAME), both hubs are active.
 // After the transition, the alliance that LOST auto has their hub active first.
-// If Blue won auto: Blue is ACTIVE during transition (because Blue will be INACTIVE in shift 0), then alternates every 25 seconds.
-// If Red won auto or tie: Blue is INACTIVE during transition (because Blue will be ACTIVE in shift 0), then alternates every 25 seconds.
+// If Blue won auto: Blue is INACTIVE in shift 0, then alternates every 25 seconds.
+// If Red won auto or tie: Blue is ACTIVE in shift 0, then alternates every 25 seconds.
 func IsBlueHubActive(matchTimeSec float64, blueWonAuto bool) bool {
 	teleopStartSec := float64(MatchTiming.WarmupDurationSec + MatchTiming.AutoDurationSec + MatchTiming.PauseDurationSec)
 	teleopEndSec := teleopStartSec + float64(MatchTiming.TeleopDurationSec)
@@ -125,11 +123,9 @@ func IsBlueHubActive(matchTimeSec float64, blueWonAuto bool) bool {
 		return true
 	}
 
-	// During transition period (first 10 seconds of teleop), only the alliance that will be INACTIVE during shift 0 has their hub active
+	// During transition period (first 10 seconds of teleop), both hubs are active
 	if matchTimeSec < transitionEndSec {
-		// Blue won auto means Blue will be INACTIVE during shift 0, so Blue hub is ACTIVE during transition
-		// Red won auto or tie means Blue will be ACTIVE during shift 0, so Blue hub is INACTIVE during transition
-		return blueWonAuto
+		return true
 	}
 
 	// During END GAME (last 30 seconds of teleop), both hubs are active
