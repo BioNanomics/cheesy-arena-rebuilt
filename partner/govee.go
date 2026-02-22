@@ -267,10 +267,12 @@ func (c *GoveeClient) startReplyListener() error {
 	c.replySocket = conn
 
 	// Join multicast group on all suitable interfaces for better Windows compatibility
+	log.Println("[Govee] About to join multicast groups...")
 	if err := c.joinMulticastOnAllInterfaces(conn, addr); err != nil {
 		conn.Close()
 		return fmt.Errorf("failed to join multicast group: %v", err)
 	}
+	log.Println("[Govee] Finished joining multicast groups")
 
 	// Start listening goroutine
 	go c.listenForReplies()
@@ -282,45 +284,57 @@ func (c *GoveeClient) startReplyListener() error {
 // joinMulticastOnAllInterfaces joins the multicast group on all suitable network interfaces.
 // This is critical for Windows compatibility where automatic interface selection often fails.
 func (c *GoveeClient) joinMulticastOnAllInterfaces(conn *net.UDPConn, addr *net.UDPAddr) error {
+	log.Println("[Govee] joinMulticastOnAllInterfaces: Starting...")
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return err
 	}
+	log.Printf("[Govee] joinMulticastOnAllInterfaces: Found %d interfaces", len(interfaces))
 
 	c.logf("[Govee] Enumerating network interfaces for multicast...")
 
 	// Wrap the UDP connection with ipv4.PacketConn for multicast control
+	log.Println("[Govee] joinMulticastOnAllInterfaces: Creating PacketConn...")
 	p := ipv4.NewPacketConn(conn)
+	log.Println("[Govee] joinMulticastOnAllInterfaces: PacketConn created")
 
 	joinedCount := 0
 	var lastErr error
 
-	for _, iface := range interfaces {
+	log.Printf("[Govee] joinMulticastOnAllInterfaces: Starting loop over %d interfaces", len(interfaces))
+	for i, iface := range interfaces {
+		log.Printf("[Govee] joinMulticastOnAllInterfaces: Processing interface %d/%d: %s", i+1, len(interfaces), iface.Name)
 		// Log all interfaces for debugging
 		c.logf("[Govee] Found interface: %s (Flags: %v, HW: %s)", iface.Name, iface.Flags, iface.HardwareAddr)
 
 		// Skip interfaces that are down, loopback, or don't support multicast
 		if iface.Flags&net.FlagUp == 0 {
 			c.logf("[Govee]   Skipping %s: interface is down", iface.Name)
+			log.Printf("[Govee] joinMulticastOnAllInterfaces: Skipping %s (down)", iface.Name)
 			continue
 		}
 		if iface.Flags&net.FlagLoopback != 0 {
 			c.logf("[Govee]   Skipping %s: loopback interface", iface.Name)
+			log.Printf("[Govee] joinMulticastOnAllInterfaces: Skipping %s (loopback)", iface.Name)
 			continue
 		}
 		if iface.Flags&net.FlagMulticast == 0 {
 			c.logf("[Govee]   Skipping %s: no multicast support", iface.Name)
+			log.Printf("[Govee] joinMulticastOnAllInterfaces: Skipping %s (no multicast)", iface.Name)
 			continue
 		}
 
 		// Get interface addresses for additional debugging
+		log.Printf("[Govee] joinMulticastOnAllInterfaces: Getting addresses for %s", iface.Name)
 		addrs, _ := iface.Addrs()
 		for _, a := range addrs {
 			c.logf("[Govee]   Interface %s has address: %s", iface.Name, a.String())
 		}
 
 		// Try to join the multicast group on this interface
+		log.Printf("[Govee] joinMulticastOnAllInterfaces: About to call JoinGroup for %s", iface.Name)
 		err := p.JoinGroup(&iface, &net.UDPAddr{IP: addr.IP})
+		log.Printf("[Govee] joinMulticastOnAllInterfaces: JoinGroup returned for %s, err=%v", iface.Name, err)
 		if err != nil {
 			c.logf("[Govee] ERROR: Failed to join multicast group on interface %s: %v", iface.Name, err)
 			lastErr = err
@@ -330,6 +344,7 @@ func (c *GoveeClient) joinMulticastOnAllInterfaces(conn *net.UDPConn, addr *net.
 		c.logf("[Govee] SUCCESS: Joined multicast group %s on interface %s (%s)", addr.IP, iface.Name, iface.HardwareAddr)
 		joinedCount++
 	}
+	log.Printf("[Govee] joinMulticastOnAllInterfaces: Loop complete, joined %d groups", joinedCount)
 
 	if joinedCount == 0 {
 		if lastErr != nil {
