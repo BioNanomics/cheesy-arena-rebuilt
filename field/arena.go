@@ -182,6 +182,7 @@ func (arena *Arena) LoadSettings() error {
 
 	// Update GoveeClient logging if it's initialized
 	if arena.GoveeClient != nil {
+		log.Printf("[Arena] Setting Govee logging to: %v", settings.GoveeLoggingEnabled)
 		arena.GoveeClient.SetLogging(settings.GoveeLoggingEnabled)
 	}
 
@@ -345,6 +346,7 @@ func (arena *Arena) InitializeLedControllers() error {
 		}
 
 		// Configure logging for Govee client
+		log.Printf("[LED] Setting Govee logging to: %v", settings.GoveeLoggingEnabled)
 		arena.GoveeClient.SetLogging(settings.GoveeLoggingEnabled)
 
 		arena.RedHubLeds = led.NewGoveeController(redDeviceId, arena.GoveeClient, settings.GoveeLoggingEnabled)
@@ -889,10 +891,11 @@ func (arena *Arena) Run() {
 	// Start Govee device discovery if using Govee controllers
 	log.Printf("[Arena] Starting Run() - GoveeClient: %v, LedControllerType: %q", arena.GoveeClient != nil, arena.EventSettings.LedControllerType)
 	if arena.GoveeClient != nil && arena.EventSettings.LedControllerType == "govee" {
+		log.Println("[Arena] About to call StartDiscovery()...")
 		if err := arena.GoveeClient.StartDiscovery(); err != nil {
-			log.Printf("Warning: Failed to start Govee discovery: %v", err)
+			log.Printf("[Arena] StartDiscovery() returned error: %v", err)
 		} else {
-			log.Println("[Govee] Device discovery started")
+			log.Println("[Arena] StartDiscovery() succeeded")
 			// Mark discovery as ready after a brief delay to allow initial device discovery
 			go func() {
 				time.Sleep(3 * time.Second)
