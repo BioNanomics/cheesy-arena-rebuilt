@@ -887,6 +887,7 @@ func (arena *Arena) checkEndgameStart(matchTimeSec float64) {
 // Loops indefinitely to track and update the arena components.
 func (arena *Arena) Run() {
 	// Start Govee device discovery if using Govee controllers
+	log.Printf("[Arena] Starting Run() - GoveeClient: %v, LedControllerType: %q", arena.GoveeClient != nil, arena.EventSettings.LedControllerType)
 	if arena.GoveeClient != nil && arena.EventSettings.LedControllerType == "govee" {
 		if err := arena.GoveeClient.StartDiscovery(); err != nil {
 			log.Printf("Warning: Failed to start Govee discovery: %v", err)
@@ -903,6 +904,8 @@ func (arena *Arena) Run() {
 				log.Println("[Govee] Device discovery stopped")
 			}()
 		}
+	} else {
+		log.Printf("[Arena] Govee discovery NOT started - GoveeClient nil: %v, LedControllerType: %q", arena.GoveeClient == nil, arena.EventSettings.LedControllerType)
 	}
 
 	// Start other loops in goroutines.
