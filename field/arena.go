@@ -180,6 +180,11 @@ func (arena *Arena) LoadSettings() error {
 	}
 	arena.EventSettings = settings
 
+	// Update GoveeClient logging if it's initialized
+	if arena.GoveeClient != nil {
+		arena.GoveeClient.SetLogging(settings.GoveeLoggingEnabled)
+	}
+
 	// Initialize the components that depend on settings.
 	arena.TeamSigns.Red1.SetId(settings.TeamSignRed1Id)
 	arena.TeamSigns.Red2.SetId(settings.TeamSignRed2Id)
