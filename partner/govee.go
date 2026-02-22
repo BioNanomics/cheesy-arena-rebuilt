@@ -448,13 +448,14 @@ func (c *GoveeClient) listenForReplies() {
 	}
 }
 
-// startScanBroadcaster starts broadcasting device discovery requests.
+// startScanBroadcaster starts broadcasting device discovery requests on all suitable interfaces.
 func (c *GoveeClient) startScanBroadcaster() error {
 	addr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", goveeMulticastAddr, goveeScanPort))
 	if err != nil {
 		return err
 	}
 
+	// Create a basic UDP connection for the primary socket
 	conn, err := net.DialUDP("udp4", nil, addr)
 	if err != nil {
 		return err
@@ -497,7 +498,7 @@ func (c *GoveeClient) broadcastScans() {
 	}
 }
 
-// sendScanRequest sends a single device discovery request.
+// sendScanRequest sends a single device discovery request on all suitable interfaces.
 func (c *GoveeClient) sendScanRequest() {
 	msg := goveeMessage{
 		Msg: goveeMessageContent{
@@ -514,15 +515,73 @@ func (c *GoveeClient) sendScanRequest() {
 		return
 	}
 
-	if c.scanSocket != nil {
-		n, err := c.scanSocket.Write(jsonData)
-		if err != nil {
-			c.logf("[Govee] ERROR: Failed to send scan request: %v", err)
-		} else {
-			c.logf("[Govee] Sent scan request (%d bytes) to %s", n, c.scanSocket.RemoteAddr())
+	// Get all network interfaces
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		c.logf("[Govee] ERROR: Failed to get network interfaces: %v", err)
+		return
+	}
+
+	multicastAddr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", goveeMulticastAddr, goveeScanPort))
+	sentCount := 0
+
+	// Send on each suitable interface
+	for _, iface := range interfaces {
+		// Skip interfaces that are down, loopback, or don't support multicast
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagMulticast == 0 {
+			continue
 		}
+
+		// Get an IPv4 address from this interface
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		var localIP net.IP
+		for _, a := range addrs {
+			if ipnet, ok := a.(*net.IPNet); ok && ipnet.IP.To4() != nil {
+				localIP = ipnet.IP
+				break
+			}
+		}
+
+		if localIP == nil {
+			continue
+		}
+
+		// Create a UDP connection bound to this interface's IP
+		localAddr := &net.UDPAddr{IP: localIP, Port: 0}
+		conn, err := net.DialUDP("udp4", localAddr, multicastAddr)
+		if err != nil {
+			c.logf("[Govee] Warning: Failed to create socket on %s (%s): %v", iface.Name, localIP, err)
+			continue
+		}
+
+		// Set multicast interface
+		p := ipv4.NewPacketConn(conn)
+		if err := p.SetMulticastInterface(&iface); err != nil {
+			c.logf("[Govee] Warning: Failed to set multicast interface %s: %v", iface.Name, err)
+			conn.Close()
+			continue
+		}
+
+		// Send the scan request
+		n, err := conn.Write(jsonData)
+		conn.Close()
+
+		if err != nil {
+			c.logf("[Govee] Warning: Failed to send on %s (%s): %v", iface.Name, localIP, err)
+		} else {
+			c.logf("[Govee] Sent scan request (%d bytes) on %s (%s)", n, iface.Name, localIP)
+			sentCount++
+		}
+	}
+
+	if sentCount == 0 {
+		c.logf("[Govee] ERROR: Failed to send scan request on any interface")
 	} else {
-		c.logf("[Govee] ERROR: Scan socket is nil, cannot send scan request")
+		c.logf("[Govee] Sent scan request on %d interface(s)", sentCount)
 	}
 }
 
