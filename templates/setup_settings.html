@@ -359,17 +359,10 @@ UI for configuring event settings.
                   <input type="text" class="form-control" name="dmxAddress" value="{{.DMXAddress}}" placeholder="10.0.100.60">
                 </div>
               </div>
-            </fieldset>
-            <fieldset class="mb-4">
-              <legend>LED Configuration</legend>
-              <p>
-                LED controller configuration is managed on the <a href="/setup/leds">LED Configuration</a> page.
-                Enable Govee logging below to see detailed diagnostic messages for Govee LED device discovery and communication.
-              </p>
               <div class="row mb-3">
-                <label class="col-lg-8 control-label" for="goveeLoggingEnabled">Enable Govee Logging</label>
-                <div class="col-lg-1 checkbox">
-                  <input type="checkbox" id="goveeLoggingEnabled" name="goveeLoggingEnabled" {{if .GoveeLoggingEnabled}} checked{{end}}>
+                <label class="col-lg-6 control-label">Enable Govee LED Logging</label>
+                <div class="col-lg-6 checkbox">
+                  <input type="checkbox" name="goveeLoggingEnabled" {{if .GoveeLoggingEnabled}}checked{{end}}>
                 </div>
               </div>
             </fieldset>
