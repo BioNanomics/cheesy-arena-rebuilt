@@ -182,12 +182,6 @@ const updateHubIndicators = function(scoreData) {
   let redWonAuto = redAutoPoints > blueAutoPoints;
   let blueWonAuto = blueAutoPoints > redAutoPoints;
 
-  // Debug: Log the AutoTieWinner value to see if it's being received
-  if (!redWonAuto && !blueWonAuto) {
-    console.log(`[Hub Debug] Tie detected! AutoTieWinner value:`, scoreData.AutoTieWinner, `Type:`, typeof scoreData.AutoTieWinner);
-    console.log(`[Hub Debug] Full scoreData keys:`, Object.keys(scoreData));
-  }
-
   // Handle tie case - use random tie-breaker from backend
   if (!redWonAuto && !blueWonAuto) {
     if (scoreData.AutoTieWinner === "red") {
@@ -200,9 +194,6 @@ const updateHubIndicators = function(scoreData) {
   // Calculate hub activation status
   let redHubActive = isRedHubActive(matchTimeSec, matchState, redWonAuto);
   let blueHubActive = isBlueHubActive(matchTimeSec, matchState, blueWonAuto);
-
-  // Debug logging to compare with backend
-  console.log(`[Hub Debug Frontend] Time: ${matchTimeSec}s, State: ${matchState}, RedAuto: ${redAutoPoints}, BlueAuto: ${blueAutoPoints}, TieWinner: ${scoreData.AutoTieWinner}, RedWon: ${redWonAuto}, BlueWon: ${blueWonAuto}, RedActive: ${redHubActive}, BlueActive: ${blueHubActive}`);
 
   // Determine if we should flash (last 4 seconds of a shift or match)
   const shouldFlash = shouldHubFlash(matchTimeSec, matchState);

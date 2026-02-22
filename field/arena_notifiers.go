@@ -6,7 +6,6 @@
 package field
 
 import (
-	"log"
 	"strconv"
 
 	"github.com/Team254/cheesy-arena/game"
@@ -230,7 +229,6 @@ func (arena *Arena) generateRealtimeScoreMessage() any {
 		arena.autoTieWinner,
 		arena.MatchState,
 	}
-	log.Printf("[Hub Debug] Sending realtime score message with AutoTieWinner: '%s'", arena.autoTieWinner)
 	return &fields
 }
 

@@ -8,7 +8,6 @@ package field
 import (
 	"fmt"
 	"log"
-	"math"
 	"reflect"
 	"strconv"
 	"strings"
@@ -487,7 +486,6 @@ func (arena *Arena) LoadMatch(match *model.Match) error {
 	} else {
 		arena.autoTieWinner = "blue"
 	}
-	log.Printf("[Hub Debug] Match loaded, autoTieWinner set to: %s", arena.autoTieWinner)
 
 	// Notify any listeners about the new match.
 	arena.MatchLoadNotifier.Notify()
@@ -749,7 +747,6 @@ func (arena *Arena) Update() {
 		arena.AllianceStationDisplayModeNotifier.Notify()
 		go arena.BlackmagicClient.StartRecording()
 		go arena.CompanionClient.SendEvent(partner.EventMatchStart)
-		log.Printf("[Hub Debug] Match starting, autoTieWinner is: %s", arena.autoTieWinner)
 		if game.MatchTiming.WarmupDurationSec > 0 {
 			arena.MatchState = WarmupPeriod
 			enabled = false
@@ -1445,12 +1442,6 @@ func (arena *Arena) handleHubLights() {
 		redHubActive := game.IsRedHubActive(matchTimeSec, redWonAuto)
 		blueHubActive := game.IsBlueHubActive(matchTimeSec, blueWonAuto)
 
-		// Debug logging
-		redAutoPoints := arena.RedRealtimeScore.CurrentScore.Summarize(&arena.BlueRealtimeScore.CurrentScore).AutoPoints
-		blueAutoPoints := arena.BlueRealtimeScore.CurrentScore.Summarize(&arena.RedRealtimeScore.CurrentScore).AutoPoints
-		log.Printf("[Hub Debug Backend] Time: %.1fs, RedAuto: %d, BlueAuto: %d, TieWinner: %s, RedWon: %v, BlueWon: %v, RedActive: %v, BlueActive: %v",
-			matchTimeSec, redAutoPoints, blueAutoPoints, arena.autoTieWinner, redWonAuto, blueWonAuto, redHubActive, blueHubActive)
-
 		// Check if we're within 4 seconds of a hub deactivation and flash
 		teleopStartSec := float64(game.MatchTiming.WarmupDurationSec + game.MatchTiming.AutoDurationSec + game.MatchTiming.PauseDurationSec)
 		teleopEndSec := teleopStartSec + float64(game.MatchTiming.TeleopDurationSec)
@@ -1541,39 +1532,21 @@ func (arena *Arena) setLedHubColors(redHubActive, blueHubActive, shouldFlash boo
 		blueColor = led.ColorOff // Off when inactive
 	}
 
-	// Apply pixel-level chase animation during transition period
+	// Apply flash pattern during transition period
 	if inTransitionPeriod {
-		// Check if controllers support pixel-level control
-		redSupportsPixels := arena.RedHubLeds.SupportsPixelControl()
-		blueSupportsPixels := arena.BlueHubLeds.SupportsPixelControl()
+		// Flash pattern during transition: OFF, ON, OFF, ON, ... (1 second each)
+		// Calculate which second we're in within the transition period
+		timeIntoTransition := matchTimeSec - teleopStartSec
+		secondInPattern := int(timeIntoTransition)
+		// OFF when second is odd, ON when second is even
+		flashOff := (secondInPattern%2 == 1)
 
-		if redHubActive && redSupportsPixels {
-			// Generate pixel-level chase pattern for red alliance
-			redPixels := arena.generateChasePattern(led.ColorRed, led.ColorWhite, matchTimeSec)
-			arena.RedHubLeds.SetPixels(redPixels)
-		} else if redHubActive && !redSupportsPixels {
-			// Fallback to simple alternating for controllers without pixel support (e.g., Govee)
-			// Alternate between alliance color and white at 1Hz
-			timeInCycle := math.Mod(matchTimeSec, 1.0)
-			if timeInCycle < 0.5 {
-				redColor = led.ColorWhite
-			} else {
-				redColor = led.ColorRed
+		if flashOff {
+			if redHubActive {
+				redColor = led.ColorOff
 			}
-		}
-
-		if blueHubActive && blueSupportsPixels {
-			// Generate pixel-level chase pattern for blue alliance
-			bluePixels := arena.generateChasePattern(led.ColorBlue, led.ColorWhite, matchTimeSec)
-			arena.BlueHubLeds.SetPixels(bluePixels)
-		} else if blueHubActive && !blueSupportsPixels {
-			// Fallback to simple alternating for controllers without pixel support (e.g., Govee)
-			// Alternate between alliance color and white at 1Hz
-			timeInCycle := math.Mod(matchTimeSec, 1.0)
-			if timeInCycle < 0.5 {
-				blueColor = led.ColorWhite
-			} else {
-				blueColor = led.ColorBlue
+			if blueHubActive {
+				blueColor = led.ColorOff
 			}
 		}
 	} else if shouldFlash {
@@ -1608,38 +1581,9 @@ func (arena *Arena) setLedHubColors(redHubActive, blueHubActive, shouldFlash boo
 		}
 	}
 
-	// Only set solid colors if not using pixel mode
-	// (pixel mode sets colors directly via SetPixels)
-	if !arena.RedHubLeds.SupportsPixelControl() || !inTransitionPeriod {
-		arena.RedHubLeds.SetColor(redColor)
-	}
-	if !arena.BlueHubLeds.SupportsPixelControl() || !inTransitionPeriod {
-		arena.BlueHubLeds.SetColor(blueColor)
-	}
-}
-
-// generateChasePattern creates a pixel array for a chase animation effect.
-// The pattern alternates between the alliance color and white, with the pattern
-// shifting over time to create a moving chase effect.
-func (arena *Arena) generateChasePattern(allianceColor, chaseColor led.Color, matchTimeSec float64) []led.Color {
-	pixels := make([]led.Color, led.NumPixelsPerStrip)
-
-	// Calculate animation offset based on time
-	// Shift pattern every 0.1 seconds for smooth animation (10 shifts per second)
-	animationSpeed := 10.0 // shifts per second
-	offset := int(matchTimeSec * animationSpeed)
-
-	// Generate alternating pattern with moving offset
-	for i := 0; i < led.NumPixelsPerStrip; i++ {
-		// Alternate between alliance color and white, shifted by offset
-		if (i+offset)%2 == 0 {
-			pixels[i] = allianceColor
-		} else {
-			pixels[i] = chaseColor
-		}
-	}
-
-	return pixels
+	// Set solid colors for all controllers
+	arena.RedHubLeds.SetColor(redColor)
+	arena.BlueHubLeds.SetColor(blueColor)
 }
 
 func (arena *Arena) handleTeamStop(station string, eStopState, aStopState bool) {
